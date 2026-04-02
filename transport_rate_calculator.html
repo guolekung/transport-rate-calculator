@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>คำนวณค่าขนส่งตามราคาน้ำมัน</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap');
+:root{
+  --primary:#1e3a5f;--primary-light:#2c5282;--primary-lighter:#e8f0fe;
+  --accent:#f59e0b;--accent-light:#fbbf24;
+  --bg:#f0f4f8;--card:#fff;--text:#1a202c;--text-light:#64748b;
+  --border:#e2e8f0;--success:#10b981;--danger:#ef4444;
+  --shadow:0 4px 24px rgba(30,58,95,.08);
+  --radius:14px;
+}
+body{font-family:'IBM Plex Sans Thai','Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px}
+h1{font-size:1.5rem;font-weight:700;color:var(--primary)}
+.app-header{text-align:center;margin-bottom:24px}
+.app-header p{color:var(--text-light);font-size:.9rem;margin-top:4px}
+
+.progress-bar{display:flex;align-items:center;gap:0;width:100%;max-width:700px;margin-bottom:32px;position:relative}
+.progress-step{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;z-index:1}
+.progress-step .circle{width:36px;height:36px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:.85rem;color:var(--text-light);transition:all .3s}
+.progress-step.active .circle{background:var(--primary);color:#fff;box-shadow:0 0 0 4px rgba(30,58,95,.15)}
+.progress-step.done .circle{background:var(--success);color:#fff}
+.progress-step .label{font-size:.7rem;color:var(--text-light);margin-top:6px;text-align:center;white-space:nowrap}
+.progress-step.active .label{color:var(--primary);font-weight:600}
+.progress-line{position:absolute;top:18px;left:0;right:0;height:3px;background:var(--border);z-index:0}
+.progress-line-fill{height:3px;background:var(--primary);transition:width .4s;position:absolute;top:18px;left:0;z-index:0}
+
+.wizard-container{width:100%;max-width:700px}
+.step-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:32px;display:none;animation:fadeIn .35s ease}
+.step-card.visible{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.step-title{font-size:1.15rem;font-weight:600;color:var(--primary);margin-bottom:6px}
+.step-desc{font-size:.88rem;color:var(--text-light);margin-bottom:20px}
+
+label.field-label{display:block;font-size:.85rem;font-weight:500;margin-bottom:6px;color:var(--text)}
+input[type=number],input[type=text],select{width:100%;padding:10px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:1rem;font-family:inherit;outline:none;transition:border .2s}
+input:focus,select:focus{border-color:var(--primary)}
+.input-group{margin-bottom:16px}
+.input-row{display:flex;gap:12px}
+.input-row .input-group{flex:1}
+.input-suffix{display:flex;align-items:center;gap:8px}
+.input-suffix span{font-size:.88rem;color:var(--text-light);white-space:nowrap}
+.input-suffix input{flex:1}
+
+.radio-group{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.radio-card{flex:1;min-width:180px;border:2px solid var(--border);border-radius:12px;padding:16px;cursor:pointer;transition:all .2s;position:relative}
+.radio-card:hover{border-color:var(--primary-light);background:var(--primary-lighter)}
+.radio-card.selected{border-color:var(--primary);background:var(--primary-lighter)}
+.radio-card input{display:none}
+.radio-card .rc-title{font-weight:600;font-size:.95rem;margin-bottom:4px}
+.radio-card .rc-desc{font-size:.8rem;color:var(--text-light)}
+
+.btn-row{display:flex;justify-content:space-between;margin-top:24px;gap:12px}
+.btn{padding:10px 28px;border:none;border-radius:10px;font-size:.95rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-light)}
+.btn-secondary{background:var(--border);color:var(--text)}
+.btn-secondary:hover{background:#cbd5e1}
+.btn-accent{background:var(--accent);color:#fff}
+.btn-accent:hover{background:var(--accent-light)}
+.btn-sm{padding:7px 16px;font-size:.82rem}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-danger:hover{background:#dc2626}
+
+.preview-box{background:var(--primary-lighter);border-radius:10px;padding:14px;margin-top:12px;max-height:200px;overflow-y:auto}
+.preview-box .tag{display:inline-block;background:var(--primary);color:#fff;padding:4px 12px;border-radius:20px;font-size:.8rem;margin:3px 4px}
+
+.uniform-hint{font-size:.78rem;color:var(--text-light);margin:0 0 14px;line-height:1.5;max-width:100%}
+
+.custom-ranges{margin-top:12px}
+.custom-range-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.custom-range-row input{width:100px}
+.custom-range-row span{font-size:.9rem;color:var(--text-light)}
+
+.example-calc{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px;margin-top:14px;font-size:.85rem;line-height:1.7;max-height:260px;overflow-y:auto;overflow-x:hidden}
+.example-calc table{width:100%;table-layout:fixed;min-width:0}
+.example-calc thead th{white-space:normal;padding:8px 6px;font-size:.78rem}
+.example-calc tbody td{padding:7px 6px;font-size:.78rem}
+.example-calc strong{color:var(--primary)}
+
+.result-section{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:32px;display:none;animation:fadeIn .35s ease;margin-top:0;width:100%;max-width:900px}
+.result-section.visible{display:block}
+.result-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+.result-header h2{font-size:1.2rem;color:var(--primary)}
+.export-btns{display:flex;gap:8px;flex-wrap:wrap}
+
+.summary-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+.summary-card{background:var(--primary-lighter);border-radius:10px;padding:14px;text-align:center}
+.summary-card .sc-label{font-size:.75rem;color:var(--text-light);margin-bottom:4px}
+.summary-card .sc-value{font-size:1.1rem;font-weight:700;color:var(--primary)}
+
+#resultTableWrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+thead th{background:var(--primary);color:#fff;padding:10px 14px;text-align:center;font-weight:600;white-space:nowrap}
+tbody td{padding:9px 14px;border-bottom:1px solid var(--border);text-align:center}
+tbody tr:hover{background:#f8fafc}
+tr.highlight-current{background:#fef3c7 !important;font-weight:600}
+tr.highlight-base{background:var(--primary-lighter) !important}
+tr.highlight-current.highlight-base{background:#d1fae5 !important}
+.badge{display:inline-block;padding:2px 8px;border-radius:8px;font-size:.72rem;font-weight:600;margin-left:4px}
+.badge-base{background:var(--primary);color:#fff}
+.badge-current{background:var(--accent);color:#fff}
+.positive{color:var(--success)}
+.negative{color:var(--danger)}
+
+.back-to-wizard{margin-top:20px;text-align:center}
+.watermark{text-align:center;margin-top:24px;font-size:.75rem;color:var(--text-light)}
+
+.ref-link-min{text-align:center;margin:0 0 14px;font-size:.8rem}
+.ref-link-min a{color:var(--primary-light);text-decoration:underline;text-underline-offset:2px}
+.ref-link-min a:hover{color:var(--primary)}
+
+.bangchak-embed{margin-bottom:10px}
+.bangchak-iframe-wrap{width:100%;max-width:320px;margin:0 auto;border-radius:8px;overflow:hidden;background:#fff;border:1px solid var(--border)}
+/* ย่อความสูง — โฟกัสส่วนบน (ไฮดีเซล); เลื่อนดูต่อในกรอบ iframe */
+.bangchak-iframe-wrap iframe{display:block;margin:0 auto;width:320px;max-width:100%;height:280px;border:0;vertical-align:middle}
+.bangchak-scroll-hint{text-align:center;font-size:.72rem;color:var(--text-light);margin:0 0 12px;line-height:1.4}
+
+@media(max-width:600px){
+  .input-row{flex-direction:column;gap:8px}
+  .radio-group{flex-direction:column}
+  .btn-row{flex-direction:column}
+  .btn{width:100%;text-align:center}
+  .result-header{flex-direction:column;align-items:flex-start}
+  .summary-cards{grid-template-columns:1fr 1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>คำนวณค่าขนส่งตามราคาน้ำมัน</h1>
+  <p>กรอกข้อมูลตามขั้นตอน เพื่อสร้างตารางค่าขนส่งตามช่วงราคาน้ำมัน</p>
+</div>
+
+<div class="progress-bar" id="progressBar">
+  <div class="progress-line"></div>
+  <div class="progress-line-fill" id="progressFill"></div>
+  <div class="progress-step active" data-step="1"><div class="circle">1</div><div class="label">น้ำมัน</div></div>
+  <div class="progress-step" data-step="2"><div class="circle">2</div><div class="label">ช่วงราคา</div></div>
+  <div class="progress-step" data-step="3"><div class="circle">3</div><div class="label">Base Rate</div></div>
+  <div class="progress-step" data-step="4"><div class="circle">4</div><div class="label">วิธีปรับ</div></div>
+</div>
+
+<div class="wizard-container" id="wizardContainer">
+
+  <!-- Step 1 -->
+  <div class="step-card visible" id="step1">
+    <div class="step-title">ราคาน้ำมันปัจจุบัน</div>
+    <div class="step-desc">ดูราคาไฮดีเซลจากตาราง แล้วกรอกช่องด้านล่าง (บาท/ลิตร)</div>
+    <div class="bangchak-embed">
+      <div class="bangchak-iframe-wrap">
+        <iframe title="ราคาน้ำมันปัจจุบัน Bangchak" width="320" height="280" src="https://oil-price.bangchak.co.th/BcpOilPrice1/th" loading="lazy"></iframe>
+      </div>
+    </div>
+    <p class="bangchak-scroll-hint">เลื่อนในตารางได้ถ้าต้องการดูชนิดอื่น</p>
+    <p class="ref-link-min"><a href="https://www.bangchak.co.th/th/oilprice/historical" target="_blank" rel="noopener noreferrer">ราคาน้ำมันย้อนหลัง</a></p>
+    <div class="input-group">
+      <label class="field-label">ราคาน้ำมัน</label>
+      <div class="input-suffix">
+        <input type="number" id="fuelPrice" step="0.01" min="0" placeholder="เช่น 32.50">
+        <span>บาท/ลิตร</span>
+      </div>
+    </div>
+    <div class="btn-row"><div></div><button class="btn btn-primary" onclick="goStep(2)">ถัดไป &rarr;</button></div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step-card" id="step2">
+    <div class="step-title">กำหนดช่วงราคาน้ำมัน</div>
+    <div class="step-desc">เลือกรูปแบบการแบ่งช่วงราคาน้ำมันสำหรับตาราง</div>
+    <div class="radio-group">
+      <label class="radio-card selected" onclick="selectRangeType('uniform')">
+        <input type="radio" name="rangeType" value="uniform" checked>
+        <div class="rc-title">ช่วงละเท่าๆ กัน</div>
+        <div class="rc-desc">เช่น เริ่ม 29.00 และระยะห่างจุดเริ่ม 3 → 29.00–31.99, 32.00–34.99</div>
+      </label>
+      <label class="radio-card" onclick="selectRangeType('custom')">
+        <input type="radio" name="rangeType" value="custom">
+        <div class="rc-title">กำหนดช่วงเอง</div>
+        <div class="rc-desc">เช่น 25-28, 28-30, 30-35, ...</div>
+      </label>
+    </div>
+    <div id="uniformInputs">
+      <p class="uniform-hint">
+        ช่วงแบบเท่าๆ กันจะทำให้<strong>จุดเริ่มถัดไปห่างกันตาม `ระยะห่างจุดเริ่ม`</strong> และแต่ละช่วงจะต่อกันแบบไม่ทับ/ไม่เว้นวรรค:
+        <br><strong>ช่วงที่ i:</strong> จาก `จาก` ถึง `จาก + ระยะห่าง - 0.01`
+        <br>ตัวอย่าง: ถ้าเริ่ม `29.00` และตั้งระยะห่างจุดเริ่ม `3` จะได้
+        <strong>29.00–31.99</strong>, <strong>32.00–34.99</strong>, <strong>35.00–37.99</strong> เป็นต้น
+        <br>(ถ้าใส่ต่ำกว่า 1 ระบบใช้ 1 เพื่อไม่ให้ช่วงทับซ้อน)
+      </p>
+      <div class="input-row">
+        <div class="input-group"><label class="field-label">ราคาเริ่มต้น (บาท)</label><input type="number" id="rangeStart" step="0.01" value="29.00" min="0"></div>
+        <div class="input-group"><label class="field-label">ราคาสิ้นสุด (บาท)</label><input type="number" id="rangeEnd" step="0.01" value="59.99" min="0"></div>
+        <div class="input-group"><label class="field-label">ระยะห่างจุดเริ่ม (บาท)</label><input type="number" id="rangeStep" step="1" value="1" min="1"></div>
+      </div>
+      <button class="btn btn-sm btn-accent" onclick="previewUniform()">ดูตัวอย่างช่วง</button>
+    </div>
+    <div id="customInputs" style="display:none">
+      <div class="custom-ranges" id="customRangesList">
+        <div class="custom-range-row">
+          <input type="number" class="cr-from" step="0.01" value="29" min="0">
+          <span>ถึง</span>
+          <input type="number" class="cr-to" step="0.01" value="29.99" min="0">
+          <span>บาท</span>
+          <button class="btn btn-sm btn-danger" onclick="removeRange(this)" title="ลบ">&times;</button>
+        </div>
+      </div>
+      <button class="btn btn-sm btn-accent" onclick="addCustomRange()" style="margin-top:4px">+ เพิ่มช่วง</button>
+    </div>
+    <div class="preview-box" id="rangePreview" style="display:none"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goStep(1)">&larr; ย้อนกลับ</button>
+      <button class="btn btn-primary" onclick="goStep(3)">ถัดไป &rarr;</button>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step-card" id="step3">
+    <div class="step-title">ค่าขนส่งฐาน (Base Rate)</div>
+    <div class="step-desc">กรอกค่าขนส่งฐาน และเลือกว่าค่าขนส่งนี้ใช้ที่ช่วงน้ำมันไหน</div>
+    <div class="input-group">
+      <label class="field-label">ค่าขนส่งฐาน</label>
+      <div class="input-suffix">
+        <input type="number" id="baseRate" step="1" min="0" placeholder="เช่น 15000">
+        <span>บาท</span>
+      </div>
+    </div>
+    <div class="input-group">
+      <label class="field-label">Base Rate อยู่ที่ช่วงน้ำมัน</label>
+      <select id="baseRangeSelect"></select>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goStep(2)">&larr; ย้อนกลับ</button>
+      <button class="btn btn-primary" onclick="goStep(4)">ถัดไป &rarr;</button>
+    </div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step-card" id="step4">
+    <div class="step-title">วิธีการปรับราคา</div>
+    <div class="step-desc">เลือกวิธีคิดเปอร์เซ็นต์ปรับค่าขนส่งเมื่อน้ำมันเปลี่ยนช่วง</div>
+    <div class="radio-group" id="calcMethodGroup" role="radiogroup" aria-label="วิธีการปรับราคา ใช้ลูกศรซ้ายขวาเลือก" tabindex="0">
+      <label class="radio-card selected" onclick="selectMethod('compound')">
+        <input type="radio" name="calcMethod" value="compound" checked>
+        <div class="rc-title">ขั้นบันได (Compound)</div>
+        <div class="rc-desc">แต่ละขั้นคิด % จากขั้นก่อนหน้า เช่น ฐาน 10,000 ปรับ 3% → ขั้น 1 = 10,300, ขั้น 2 = 10,609</div>
+      </label>
+      <label class="radio-card" onclick="selectMethod('base')">
+        <input type="radio" name="calcMethod" value="base">
+        <div class="rc-title">จาก Base Rate</div>
+        <div class="rc-desc">ทุกขั้นคิด % จากราคาฐานเดิม เช่น ฐาน 10,000 ปรับ 3% ต่อขั้น → ขั้น 1 = +300, ขั้น 2 = +600</div>
+      </label>
+    </div>
+
+    <div class="input-group" style="margin-top:14px">
+      <label class="field-label">% ปรับต่อ <span id="pctUnitText">1 บาท</span></label>
+      <div class="input-suffix">
+        <input type="number" id="adjustPercent" step="0.1" min="0" value="2" placeholder="เช่น 2">
+        <span>%</span>
+      </div>
+    </div>
+
+    <div class="radio-group" id="pctModeGroup" role="radiogroup" aria-label="วิธีคิดเปอร์เซ็นต์ต่อหน่วย" tabindex="0">
+      <label class="radio-card pct-mode-card selected" onclick="selectPctMode('per_baht')">
+        <input type="radio" name="pctMode" value="per_baht" checked>
+        <div class="rc-title">% ต่อ 1 บาท</div>
+        <div class="rc-desc">ถ้าน้ำมันเพิ่มขึ้น 1 บาท → ค่าขนส่งเพิ่ม/ลดตามเปอร์เซ็นต์นี้</div>
+      </label>
+      <label class="radio-card pct-mode-card" onclick="selectPctMode('per_step')">
+        <input type="radio" name="pctMode" value="per_step">
+        <div class="rc-title">% ต่อ 1 ช่วง</div>
+        <div class="rc-desc">ใช้โหมดเดิม: เปอร์เซ็นต์คิด “ต่อจำนวนช่วง” ไม่สนความกว้างของช่วง</div>
+      </label>
+    </div>
+
+    <div class="example-calc" id="exampleCalc"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="goStep(3)">&larr; ย้อนกลับ</button>
+      <button class="btn btn-primary" onclick="generateResult()">สร้างตาราง &rarr;</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="result-section" id="resultSection">
+  <div class="result-header">
+    <h2>ตารางค่าขนส่งตามช่วงราคาน้ำมัน</h2>
+    <div class="export-btns">
+      <button class="btn btn-sm btn-accent" onclick="exportExcel()">Export Excel</button>
+      <button class="btn btn-sm btn-primary" onclick="exportPDF()">Export PDF</button>
+      <button class="btn btn-sm btn-secondary" onclick="exportImage()">Export รูปภาพ</button>
+    </div>
+  </div>
+  <div class="summary-cards" id="summaryCards"></div>
+  <div id="resultTableWrap"></div>
+  <div class="back-to-wizard">
+    <button class="btn btn-secondary" onclick="backToWizard()">&#8634; แก้ไขข้อมูล / คำนวณใหม่</button>
+  </div>
+</div>
+
+<div class="watermark">&copy; Transport Rate Calculator</div>
+
+<script>
+let currentStep = 1;
+const totalSteps = 4;
+let ranges = [];
+let calcMethod = 'compound';
+let rangeType = 'uniform';
+let pctMode = 'per_baht'; // per_baht: คิด % ต่อราคาน้ำมันเพิ่ม 1 บาท, per_step: คิด % ต่อจำนวนช่วง
+let resultData = [];
+let baseSelectHasInitialized = false; // ตั้งค่าเริ่มต้น Base Rate ให้ตรงกับ “ราคาน้ำมันปัจจุบัน” ครั้งแรกที่เข้าขั้น
+
+function goStep(step) {
+  if (!validateStep(currentStep, step)) return;
+  if (step === 3) populateBaseRangeSelect();
+  if (step === 4) updateExampleCalc();
+
+  document.getElementById('step' + currentStep).classList.remove('visible');
+  document.getElementById('step' + step).classList.add('visible');
+  currentStep = step;
+  updateProgress();
+}
+
+function validateStep(from, to) {
+  if (to <= from) return true;
+  if (from === 1) {
+    const v = parseFloat(document.getElementById('fuelPrice').value);
+    if (isNaN(v) || v <= 0) { alert('กรุณากรอกราคาน้ำมันที่ถูกต้อง'); return false; }
+  }
+  if (from === 2) {
+    buildRanges();
+    if (ranges.length === 0) { alert('กรุณากำหนดช่วงราคาน้ำมันอย่างน้อย 1 ช่วง'); return false; }
+  }
+  if (from === 3) {
+    const v = parseFloat(document.getElementById('baseRate').value);
+    if (isNaN(v) || v <= 0) { alert('กรุณากรอกค่าขนส่งฐานที่ถูกต้อง'); return false; }
+  }
+  if (from === 4) {
+    const v = parseFloat(document.getElementById('adjustPercent').value);
+    if (isNaN(v) || v <= 0) { alert('กรุณากรอกเปอร์เซ็นต์ที่ถูกต้อง'); return false; }
+  }
+  return true;
+}
+
+function updateProgress() {
+  const steps = document.querySelectorAll('.progress-step');
+  steps.forEach((el, i) => {
+    el.classList.remove('active', 'done');
+    if (i + 1 < currentStep) el.classList.add('done');
+    else if (i + 1 === currentStep) el.classList.add('active');
+  });
+  const pct = ((currentStep - 1) / (totalSteps - 1)) * 100;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function selectRangeType(type) {
+  rangeType = type;
+  document.querySelectorAll('#step2 .radio-card').forEach(c => c.classList.remove('selected'));
+  const cards = document.querySelectorAll('#step2 .radio-card');
+  if (type === 'uniform') { cards[0].classList.add('selected'); }
+  else { cards[1].classList.add('selected'); }
+  document.getElementById('uniformInputs').style.display = type === 'uniform' ? '' : 'none';
+  document.getElementById('customInputs').style.display = type === 'custom' ? '' : 'none';
+  document.getElementById('rangePreview').style.display = 'none';
+}
+
+function previewUniform() {
+  buildRanges();
+  showPreview();
+}
+
+function buildRanges() {
+  ranges = [];
+  if (rangeType === 'uniform') {
+    const s = roundN(parseFloat(document.getElementById('rangeStart').value));
+    const e = roundN(parseFloat(document.getElementById('rangeEnd').value));
+    const st = roundN(parseFloat(document.getElementById('rangeStep').value));
+    if (isNaN(s) || isNaN(e) || isNaN(st) || st <= 0 || e < s) return;
+    let stepGap = roundN(st);
+    if (stepGap < 1) stepGap = 1;
+    let from = s;
+    while (from <= e + 1e-9 && ranges.length <= 200) {
+      // ช่วงจะต่อกัน: to = nextFrom - 0.01
+      // โดย nextFrom = from + stepGap
+      let to = roundN(from + stepGap - 0.01);
+      if (to > e) to = e;
+      if (from <= e) ranges.push({ from: roundN(from), to: roundN(to) });
+      from = roundN(from + stepGap);
+      if (from > e) break;
+    }
+  } else {
+    const rows = document.querySelectorAll('.custom-range-row');
+    rows.forEach(row => {
+      const f = roundN(parseFloat(row.querySelector('.cr-from').value));
+      const t = roundN(parseFloat(row.querySelector('.cr-to').value));
+      if (!isNaN(f) && !isNaN(t) && t >= f) ranges.push({ from: f, to: t });
+    });
+    ranges.sort((a, b) => a.from - b.from);
+  }
+}
+
+function roundN(n) { return Math.round(n * 100) / 100; }
+
+function fmt(n) { return n.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+function fmtRange(a, b) { return fmt(a) + ' - ' + fmt(b); }
+
+function fuelInRange(p, r) {
+  const pi = Math.round(p * 100);
+  const fi = Math.round(r.from * 100);
+  const ti = Math.round(r.to * 100);
+  return pi >= fi && pi <= ti;
+}
+
+function isResultVisible() {
+  const sec = document.getElementById('resultSection');
+  return !!(sec && sec.classList.contains('visible'));
+}
+
+function getCurrentFuelRangeIndex() {
+  const fpEl = document.getElementById('fuelPrice');
+  const fp = fpEl ? parseFloat(fpEl.value) : NaN;
+  if (isNaN(fp) || fp <= 0 || !ranges || ranges.length === 0) return -1;
+  for (let i = 0; i < ranges.length; i++) {
+    if (fuelInRange(fp, ranges[i])) return i;
+  }
+  return -1;
+}
+
+function showPreview() {
+  if (ranges.length === 0) return;
+  const box = document.getElementById('rangePreview');
+  box.style.display = '';
+  box.innerHTML = '<div style="font-size:.8rem;font-weight:600;margin-bottom:6px;color:var(--primary)">ช่วงราคาน้ำมันทั้งหมด (' + ranges.length + ' ช่วง)</div>' +
+    ranges.map(r => '<span class="tag">' + fmtRange(r.from, r.to) + '</span>').join('');
+}
+
+function addCustomRange() {
+  const list = document.getElementById('customRangesList');
+  const lastRow = list.querySelector('.custom-range-row:last-child');
+  let nextFrom = 28;
+  if (lastRow) { nextFrom = parseFloat(lastRow.querySelector('.cr-to').value) || nextFrom; }
+  const div = document.createElement('div');
+  div.className = 'custom-range-row';
+  div.innerHTML = '<input type="number" class="cr-from" step="0.01" value="' + nextFrom + '" min="0">' +
+    '<span>ถึง</span><input type="number" class="cr-to" step="0.01" value="' + roundN(nextFrom + 0.99) + '" min="0"><span>บาท</span>' +
+    '<button class="btn btn-sm btn-danger" onclick="removeRange(this)" title="ลบ">&times;</button>';
+  list.appendChild(div);
+}
+
+function removeRange(btn) {
+  const list = document.getElementById('customRangesList');
+  if (list.children.length <= 1) { alert('ต้องมีอย่างน้อย 1 ช่วง'); return; }
+  btn.closest('.custom-range-row').remove();
+}
+
+function selectMethod(m) {
+  calcMethod = m;
+  // เลือกเฉพาะการ์ดของวิธีปรับราคา ไม่ไปรบกวนปุ่มของโหมด % ต่อหน่วย
+  document.querySelectorAll('#calcMethodGroup .radio-card').forEach(c => c.classList.remove('selected'));
+  const cards = document.querySelectorAll('#calcMethodGroup .radio-card');
+  if (m === 'compound') {
+    cards[0].classList.add('selected');
+    cards[0].querySelector('input').checked = true;
+    cards[1].querySelector('input').checked = false;
+  } else {
+    cards[1].classList.add('selected');
+    cards[1].querySelector('input').checked = true;
+    cards[0].querySelector('input').checked = false;
+  }
+
+  updateExampleCalc();
+  if (isResultVisible()) generateResult();
+}
+
+function selectPctMode(m) {
+  pctMode = m;
+  document.querySelectorAll('#step4 .pct-mode-card').forEach(c => c.classList.remove('selected'));
+  const cards = document.querySelectorAll('#step4 .pct-mode-card');
+  if (m === 'per_baht') {
+    cards[0].classList.add('selected');
+    cards[0].querySelector('input').checked = true;
+    cards[1].querySelector('input').checked = false;
+  } else {
+    cards[1].classList.add('selected');
+    cards[1].querySelector('input').checked = true;
+    cards[0].querySelector('input').checked = false;
+  }
+  const unitText = m === 'per_baht' ? '1 บาท' : 'ขั้น';
+  const el = document.getElementById('pctUnitText');
+  if (el) el.textContent = unitText;
+  updateExampleCalc();
+  if (isResultVisible()) generateResult();
+}
+
+function getPctUnitText() {
+  return pctMode === 'per_baht' ? '1 บาท' : 'ขั้น';
+}
+
+function getDeltaFromBase(i, baseIdx) {
+  if (pctMode === 'per_step') return i - baseIdx;
+  // per_baht: คิดจากความต่างของ “จุดเริ่มช่วง”
+  return roundN(ranges[i].from - ranges[baseIdx].from);
+}
+
+function fmtDelta(val) {
+  const n = Math.round(val * 100) / 100;
+  if (pctMode === 'per_baht') return n.toFixed(2);
+  return String(n);
+}
+
+function updateExampleCalc() {
+  const box = document.getElementById('exampleCalc');
+  if (!box) return;
+
+  const pct = parseFloat(document.getElementById('adjustPercent').value);
+  const baseRate = parseFloat(document.getElementById('baseRate').value);
+  const baseIdx = parseInt(document.getElementById('baseRangeSelect').value);
+  const fuelPrice = parseFloat(document.getElementById('fuelPrice').value);
+
+  if (isNaN(pct) || pct <= 0) {
+    box.innerHTML = '';
+    return;
+  }
+  if (!ranges || ranges.length === 0) buildRanges();
+
+  if (isNaN(baseRate) || baseRate <= 0 || isNaN(baseIdx) || baseIdx < 0 || baseIdx >= ranges.length) {
+    box.innerHTML = '<div style="color:var(--text-light)">ตัวอย่าง: กรุณากรอก <strong>Base Rate</strong> และเลือกช่วงฐานก่อน</div>';
+    return;
+  }
+
+  const deltaHeader = pctMode === 'per_baht' ? 'ห่างจากฐาน' : 'ขั้นห่างจากฐาน';
+  const methodLabel = calcMethod === 'base' ? 'จาก Base Rate' : 'ขั้นบันได (Compound)';
+
+  let html =
+    '<div style="font-size:.78rem;color:var(--text-light);margin-bottom:10px">ตัวอย่างอัตราค่าขนส่ง (ทุกช่วง) - ' + methodLabel + '</div>' +
+    '<table><thead><tr>' +
+    '<th>ช่วงราคาน้ำมัน</th>' +
+    '<th>' + deltaHeader + '</th>' +
+    '<th>% จากฐาน</th>' +
+    '<th>ค่าขนส่ง</th>' +
+    '<th>ส่วนต่างจากก่อนหน้า</th>' +
+    '</tr></thead><tbody>';
+
+  let prevRate = null;
+  for (let i = 0; i < ranges.length; i++) {
+    const diff = getDeltaFromBase(i, baseIdx);
+    let rate, pctFromBase;
+
+    if (calcMethod === 'base') {
+      pctFromBase = diff * pct;
+      rate = baseRate * (1 + pctFromBase / 100);
+    } else {
+      if (diff === 0) {
+        rate = baseRate;
+        pctFromBase = 0;
+      } else if (diff > 0) {
+        rate = baseRate * Math.pow(1 + pct / 100, diff);
+        pctFromBase = ((rate / baseRate) - 1) * 100;
+      } else {
+        rate = baseRate * Math.pow(1 - pct / 100, Math.abs(diff));
+        pctFromBase = ((rate / baseRate) - 1) * 100;
+      }
+    }
+
+    const isBase = i === baseIdx;
+    const isCurrent = !isNaN(fuelPrice) && fuelInRange(fuelPrice, ranges[i]);
+    let cls = '';
+    if (isBase && isCurrent) cls = 'highlight-current highlight-base';
+    else if (isCurrent) cls = 'highlight-current';
+    else if (isBase) cls = 'highlight-base';
+
+    const deltaCell = diff > 0 ? '+' + fmtDelta(diff) : diff === 0 ? '0' : fmtDelta(diff);
+    const pctCell = isBase ? '0.00%' : (pctFromBase > 0 ? '+' : '') + pctFromBase.toFixed(2) + '%';
+    const adjDiff = prevRate === null ? 0 : rate - prevRate;
+    prevRate = rate;
+    const adjDiffCell = i === 0 ? '-' : (adjDiff > 0 ? '+' : '') + fmt(adjDiff);
+
+    html +=
+      '<tr class="' + cls + '">' +
+      '<td>' + fmtRange(ranges[i].from, ranges[i].to) + '</td>' +
+      '<td>' + deltaCell + '</td>' +
+      '<td>' + pctCell + '</td>' +
+      '<td>' + fmt(rate) + '</td>' +
+      '<td>' + adjDiffCell + '</td>' +
+      '</tr>';
+  }
+
+  html += '</tbody></table>';
+  box.innerHTML = html;
+}
+
+function populateBaseRangeSelect() {
+  buildRanges();
+  const sel = document.getElementById('baseRangeSelect');
+  const prev = sel.value;
+  sel.innerHTML = '';
+  ranges.forEach((r, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = fmtRange(r.from, r.to) + ' บาท';
+    sel.appendChild(opt);
+  });
+  const prevNum = prev === '' || prev === null ? NaN : parseInt(prev, 10);
+  const keepPrev = !isNaN(prevNum) && prevNum >= 0 && prevNum < ranges.length;
+  // Default ใน Step 3 (Base Rate) ให้เป็น “ช่วงแรกสุด”
+  if (!baseSelectHasInitialized) {
+    sel.value = '0';
+    baseSelectHasInitialized = true;
+  } else {
+    sel.value = keepPrev ? String(prevNum) : '0';
+  }
+}
+
+function populateMaxRangeSelect() {
+  buildRanges();
+  const sel = document.getElementById('maxRangeSelect');
+  sel.innerHTML = '<option value="all">ทั้งหมด (' + ranges.length + ' ช่วง)</option>';
+  ranges.forEach((r, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = fmtRange(r.from, r.to) + ' บาท';
+    sel.appendChild(opt);
+  });
+  sel.value = 'all';
+}
+
+function generateResult() {
+  const fuelPrice = parseFloat(document.getElementById('fuelPrice').value);
+  const pct = parseFloat(document.getElementById('adjustPercent').value);
+  const baseRate = parseFloat(document.getElementById('baseRate').value);
+  const baseIdx = parseInt(document.getElementById('baseRangeSelect').value);
+  const maxIdx = ranges.length - 1; // แสดงครบทุกช่วง (ตัด Step 6 ออกแล้ว)
+
+  if (isNaN(pct) || pct <= 0) { alert('กรุณากรอกเปอร์เซ็นต์ที่ถูกต้อง'); return; }
+  if (isNaN(baseRate) || baseRate <= 0) { alert('กรุณากรอกค่าขนส่งฐานที่ถูกต้อง'); return; }
+
+  resultData = [];
+  for (let i = 0; i <= maxIdx; i++) {
+    const diff = getDeltaFromBase(i, baseIdx);
+    let rate, pctFromBase;
+    if (calcMethod === 'base') {
+      pctFromBase = diff * pct;
+      rate = baseRate * (1 + pctFromBase / 100);
+    } else {
+      if (diff === 0) {
+        rate = baseRate;
+        pctFromBase = 0;
+      } else if (diff > 0) {
+        rate = baseRate * Math.pow(1 + pct / 100, diff);
+        pctFromBase = ((rate / baseRate) - 1) * 100;
+      } else {
+        rate = baseRate * Math.pow(1 - pct / 100, Math.abs(diff));
+        pctFromBase = ((rate / baseRate) - 1) * 100;
+      }
+    }
+    const isBase = i === baseIdx;
+    const isCurrent = fuelInRange(fuelPrice, ranges[i]);
+    resultData.push({
+      range: ranges[i],
+      steps: diff,
+      pctFromBase: pctFromBase,
+      rate: rate,
+      diffFromBase: rate - baseRate,
+      isBase: isBase,
+      isCurrent: isCurrent
+    });
+  }
+
+  renderResult(fuelPrice, pct, baseRate, baseIdx);
+}
+
+function renderResult(fuelPrice, pct, baseRate, baseIdx) {
+  document.getElementById('wizardContainer').style.display = 'none';
+  document.getElementById('progressBar').style.display = 'none';
+  const sec = document.getElementById('resultSection');
+  sec.classList.add('visible');
+
+  const methodLabel = calcMethod === 'base' ? 'จาก Base Rate' : 'ขั้นบันได (Compound)';
+  const pctLabel = pctMode === 'per_baht' ? '% ปรับต่อ 1 บาท' : '% ปรับต่อขั้น';
+  const deltaHeader = pctMode === 'per_baht' ? 'ห่างจากฐาน (บาท)' : 'ขั้นห่างจากฐาน';
+
+  document.getElementById('summaryCards').innerHTML =
+    '<div class="summary-card"><div class="sc-label">น้ำมันปัจจุบัน</div><div class="sc-value">' + fmt(fuelPrice) + ' บ./ล.</div></div>' +
+    '<div class="summary-card"><div class="sc-label">ค่าขนส่งฐาน</div><div class="sc-value">' + fmt(baseRate) + ' บาท</div></div>' +
+    '<div class="summary-card"><div class="sc-label">ช่วงน้ำมันฐาน</div><div class="sc-value">' + fmtRange(ranges[baseIdx].from, ranges[baseIdx].to) + '</div></div>' +
+    '<div class="summary-card"><div class="sc-label">วิธีปรับ</div><div class="sc-value">' + methodLabel + '</div></div>' +
+    '<div class="summary-card"><div class="sc-label">' + pctLabel + '</div><div class="sc-value">' + pct + '%</div></div>';
+
+  let html = '<table id="resultTable"><thead><tr>' +
+    '<th>ลำดับ</th><th>ช่วงราคาน้ำมัน (บาท)</th><th>' + deltaHeader + '</th><th>% ปรับจากฐาน</th><th>ค่าขนส่ง (บาท)</th><th>ผลต่างจากฐาน (บาท)</th>' +
+    '</tr></thead><tbody>';
+
+  resultData.forEach((d, i) => {
+    let cls = '';
+    if (d.isBase && d.isCurrent) cls = 'highlight-current highlight-base';
+    else if (d.isCurrent) cls = 'highlight-current';
+    else if (d.isBase) cls = 'highlight-base';
+
+    let badges = '';
+    if (d.isBase) badges += '<span class="badge badge-base">ฐาน</span>';
+    if (d.isCurrent) badges += '<span class="badge badge-current">ปัจจุบัน</span>';
+
+    const pctSign = d.pctFromBase > 0 ? '+' : '';
+    const diffSign = d.diffFromBase > 0 ? '+' : '';
+    const diffClass = d.diffFromBase > 0 ? 'positive' : d.diffFromBase < 0 ? 'negative' : '';
+    const s = fmtDelta(d.steps);
+    const stepsLabel = d.steps > 0 ? '+' + s : d.steps === 0 ? '-' : s;
+
+    html += '<tr class="' + cls + '">' +
+      '<td>' + (i + 1) + '</td>' +
+      '<td>' + fmtRange(d.range.from, d.range.to) + badges + '</td>' +
+      '<td>' + stepsLabel + '</td>' +
+      '<td>' + (d.isBase ? '0%' : pctSign + d.pctFromBase.toFixed(2) + '%') + '</td>' +
+      '<td>' + fmt(d.rate) + '</td>' +
+      '<td class="' + diffClass + '">' + (d.isBase ? '-' : diffSign + fmt(d.diffFromBase)) + '</td></tr>';
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('resultTableWrap').innerHTML = html;
+}
+
+function backToWizard() {
+  document.getElementById('resultSection').classList.remove('visible');
+  document.getElementById('wizardContainer').style.display = '';
+  document.getElementById('progressBar').style.display = '';
+  baseSelectHasInitialized = false; // ให้เริ่มต้น Base Rate เป็นช่วง “ราคาปัจจุบัน” ใหม่ทุกครั้งที่แก้ไข
+  goStep(1);
+}
+
+function exportExcel() {
+  const fuelPrice = parseFloat(document.getElementById('fuelPrice').value);
+  const pct = parseFloat(document.getElementById('adjustPercent').value);
+  const baseRate = parseFloat(document.getElementById('baseRate').value);
+  const methodLabel = calcMethod === 'base' ? 'จาก Base Rate' : 'ขั้นบันได (Compound)';
+  const pctLabel = pctMode === 'per_baht' ? '% ปรับต่อ 1 บาท' : '% ปรับต่อขั้น';
+  const deltaCol = pctMode === 'per_baht' ? 'ห่างจากฐาน (บาท)' : 'ขั้นห่างจากฐาน';
+
+  const header = [
+    ['คำนวณค่าขนส่งตามราคาน้ำมัน'],
+    ['น้ำมันปัจจุบัน', fuelPrice + ' บาท/ลิตร'],
+    ['ค่าขนส่งฐาน', baseRate + ' บาท'],
+    ['วิธีปรับ', methodLabel],
+    [pctLabel, pct + '%'],
+    [],
+    ['ลำดับ', 'ช่วงราคาน้ำมัน (บาท)', deltaCol, '% ปรับจากฐาน', 'ค่าขนส่ง (บาท)', 'ผลต่างจากฐาน (บาท)', 'หมายเหตุ']
+  ];
+
+  const rows = resultData.map((d, i) => {
+    let note = '';
+    if (d.isBase) note += 'ฐาน';
+    if (d.isCurrent) note += (note ? ', ' : '') + 'ราคาปัจจุบัน';
+    return [
+      i + 1,
+      fmtRange(d.range.from, d.range.to),
+      d.steps,
+      d.pctFromBase.toFixed(2) + '%',
+      Math.round(d.rate * 100) / 100,
+      Math.round(d.diffFromBase * 100) / 100,
+      note
+    ];
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet([...header, ...rows]);
+  ws['!cols'] = [{ wch: 8 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 16 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'ค่าขนส่ง');
+  XLSX.writeFile(wb, 'transport_rate_' + todayStr() + '.xlsx');
+}
+
+function getHtml2CanvasResultOpts() {
+  return {
+    scale: 2,
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: '#ffffff',
+    logging: false,
+    onclone: function(clonedDoc) {
+      var sec = clonedDoc.getElementById('resultSection');
+      if (sec) {
+        sec.style.animation = 'none';
+        sec.style.opacity = '1';
+        sec.style.transform = 'none';
+        sec.style.filter = 'none';
+        sec.style.webkitFilter = 'none';
+      }
+      var tbl = clonedDoc.getElementById('resultTable');
+      if (tbl) {
+        tbl.style.color = '#1a202c';
+        tbl.querySelectorAll('tbody td').forEach(function(td) { td.style.color = '#1a202c'; });
+        tbl.querySelectorAll('tbody tr').forEach(function(tr) {
+          tr.style.opacity = '1';
+          tr.style.filter = 'none';
+        });
+      }
+      clonedDoc.querySelectorAll('.summary-card .sc-value').forEach(function(el) { el.style.color = '#1e3a5f'; });
+      clonedDoc.querySelectorAll('.summary-card .sc-label').forEach(function(el) { el.style.color = '#64748b'; });
+      clonedDoc.querySelectorAll('.result-header h2').forEach(function(el) { el.style.color = '#1e3a5f'; });
+      clonedDoc.documentElement.style.backgroundColor = '#ffffff';
+      if (clonedDoc.body) clonedDoc.body.style.backgroundColor = '#ffffff';
+    }
+  };
+}
+
+async function exportPDF() {
+  const el = document.getElementById('resultSection');
+  const canvas = await html2canvas(el, getHtml2CanvasResultOpts());
+  const imgData = canvas.toDataURL('image/png');
+  const { jsPDF } = window.jspdf;
+  const ratio = canvas.width / canvas.height;
+  const pdfW = 297;
+  const pdfH = pdfW / ratio;
+  const orientation = ratio > 1 ? 'l' : 'p';
+  const pdf = new jsPDF({ orientation, unit: 'mm', format: [pdfW, pdfH + 20] });
+  pdf.addImage(imgData, 'PNG', 10, 10, pdfW - 20, (pdfW - 20) / ratio);
+  pdf.save('transport_rate_' + todayStr() + '.pdf');
+}
+
+async function exportImage() {
+  const el = document.getElementById('resultSection');
+  const canvas = await html2canvas(el, getHtml2CanvasResultOpts());
+  const link = document.createElement('a');
+  link.download = 'transport_rate_' + todayStr() + '.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2);
+}
+
+document.getElementById('adjustPercent').addEventListener('input', function() {
+  updateExampleCalc();
+  if (isResultVisible()) generateResult();
+});
+
+function isRangePreviewVisible() {
+  const pv = document.getElementById('rangePreview');
+  return pv && pv.style.display !== 'none';
+}
+
+function setupWizardEnterNavigation() {
+  document.getElementById('fuelPrice').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    goStep(2);
+  });
+
+  document.getElementById('rangeStart').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    document.getElementById('rangeEnd').focus();
+  });
+  document.getElementById('rangeEnd').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    document.getElementById('rangeStep').focus();
+  });
+  document.getElementById('rangeStep').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (!isRangePreviewVisible()) {
+      previewUniform();
+    } else {
+      goStep(3);
+    }
+  });
+
+  document.getElementById('customRangesList').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+    const inputs = Array.from(document.querySelectorAll('#customRangesList input[type="number"]'));
+    const idx = inputs.indexOf(e.target);
+    if (idx === -1) return;
+    e.preventDefault();
+    if (idx < inputs.length - 1) {
+      inputs[idx + 1].focus();
+    } else {
+      goStep(3);
+    }
+  });
+
+  document.getElementById('step4').addEventListener('keydown', function(e) {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      if (e.target.tagName === 'BUTTON') return;
+      // ลูกศรซ้าย/ขวาให้ทำงานเฉพาะการเลือก “วิธีปรับราคา” เท่านั้น
+      if (!(e.target.closest && e.target.closest('#calcMethodGroup'))) return;
+      e.preventDefault();
+      selectMethod(e.key === 'ArrowLeft' ? 'compound' : 'base');
+      return;
+    }
+    if (e.key !== 'Enter') return;
+    if (e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    document.getElementById('adjustPercent').focus();
+  });
+
+  document.getElementById('adjustPercent').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    generateResult();
+  });
+
+  document.getElementById('baseRate').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    document.getElementById('baseRangeSelect').focus();
+  });
+  document.getElementById('baseRangeSelect').addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    goStep(4);
+  });
+
+  document.getElementById('baseRangeSelect').addEventListener('change', function() {
+    updateExampleCalc();
+    if (isResultVisible()) generateResult();
+  });
+
+  // Step 6 ถูกตัดออกแล้ว (maxRangeSelect ไม่มีอยู่)
+}
+
+setupWizardEnterNavigation();
+
+</script>
+</body>
+</html>
