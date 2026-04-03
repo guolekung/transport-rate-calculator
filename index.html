@@ -698,7 +698,7 @@ function renderResult(fuelPrice, pct, baseRate, baseIdx) {
     '<div class="summary-card"><div class="sc-label">' + pctLabel + '</div><div class="sc-value">' + pct + '%</div></div>';
 
   let html = '<table id="resultTable"><thead><tr>' +
-    '<th>ลำดับ</th><th>ช่วงราคาน้ำมัน (บาท)</th><th>' + deltaHeader + '</th><th>% ปรับจากฐาน</th><th>ค่าขนส่ง (บาท)</th><th>ผลต่างจากฐาน (บาท)</th>' +
+    '<th>ลำดับ</th><th>ช่วงราคาน้ำมัน (บาท)</th><th>ค่าขนส่ง (บาท)</th><th>' + deltaHeader + '</th><th>% ปรับจากฐาน</th><th>ผลต่างจากฐาน (บาท)</th>' +
     '</tr></thead><tbody>';
 
   resultData.forEach((d, i) => {
@@ -720,9 +720,9 @@ function renderResult(fuelPrice, pct, baseRate, baseIdx) {
     html += '<tr class="' + cls + '">' +
       '<td>' + (i + 1) + '</td>' +
       '<td>' + fmtRange(d.range.from, d.range.to) + badges + '</td>' +
+      '<td>' + fmt(d.rate) + '</td>' +
       '<td>' + stepsLabel + '</td>' +
       '<td>' + (d.isBase ? '0%' : pctSign + d.pctFromBase.toFixed(2) + '%') + '</td>' +
-      '<td>' + fmt(d.rate) + '</td>' +
       '<td class="' + diffClass + '">' + (d.isBase ? '-' : diffSign + fmt(d.diffFromBase)) + '</td></tr>';
   });
 
@@ -753,7 +753,7 @@ function exportExcel() {
     ['วิธีปรับ', methodLabel],
     [pctLabel, pct + '%'],
     [],
-    ['ลำดับ', 'ช่วงราคาน้ำมัน (บาท)', deltaCol, '% ปรับจากฐาน', 'ค่าขนส่ง (บาท)', 'ผลต่างจากฐาน (บาท)', 'หมายเหตุ']
+    ['ลำดับ', 'ช่วงราคาน้ำมัน (บาท)', 'ค่าขนส่ง (บาท)', deltaCol, '% ปรับจากฐาน', 'ผลต่างจากฐาน (บาท)', 'หมายเหตุ']
   ];
 
   const rows = resultData.map((d, i) => {
@@ -763,16 +763,16 @@ function exportExcel() {
     return [
       i + 1,
       fmtRange(d.range.from, d.range.to),
+      Math.round(d.rate * 100) / 100,
       d.steps,
       d.pctFromBase.toFixed(2) + '%',
-      Math.round(d.rate * 100) / 100,
       Math.round(d.diffFromBase * 100) / 100,
       note
     ];
   });
 
   const ws = XLSX.utils.aoa_to_sheet([...header, ...rows]);
-  ws['!cols'] = [{ wch: 8 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 20 }, { wch: 16 }];
+  ws['!cols'] = [{ wch: 8 }, { wch: 24 }, { wch: 18 }, { wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 16 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'ค่าขนส่ง');
   XLSX.writeFile(wb, 'transport_rate_' + todayStr() + '.xlsx');
