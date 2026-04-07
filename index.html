@@ -470,6 +470,7 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
   <div class="cost-block" style="margin-top:14px">
     <h3>5) บันทึกงาน + ซิงก์ Google Drive</h3>
     <div class="input-row">
+      <div class="input-group"><label class="field-label">ชื่อลูกค้า</label><input type="text" id="saveCustomerName" placeholder="เช่น ลูกค้า A"></div>
       <div class="input-group"><label class="field-label">ชื่องาน/ลูกค้า</label><input type="text" id="saveJobName" placeholder="เช่น ลูกค้า A - โรงงาน B"></div>
       <div class="input-group"><label class="field-label">แท็ก</label><input type="text" id="saveJobTags" placeholder="เช่น LCB, import, ใกล้เคียง"></div>
     </div>
@@ -478,10 +479,28 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
       <input type="text" id="saveJobNote" placeholder="เช่น ลูกค้าขอเครดิต 60 วัน">
     </div>
     <div class="mini-actions">
+      <button class="btn btn-sm btn-secondary" onclick="suggestJobName()">ตั้งชื่ออัตโนมัติ</button>
       <button class="btn btn-sm btn-primary" onclick="saveCurrentScenario()">บันทึกงานนี้</button>
       <button class="btn btn-sm btn-secondary" onclick="exportSavedJobsJson()">Export JSON</button>
       <button class="btn btn-sm btn-secondary" onclick="triggerImportSavedJobs()">Import JSON</button>
       <button class="btn btn-sm btn-danger" onclick="clearAllSavedJobs()">ล้างประวัติทั้งหมด</button>
+    </div>
+    <div class="input-row">
+      <div class="input-group">
+        <label class="field-label">
+          <input type="checkbox" id="autoNameOnSave" checked style="width:auto"> ตั้งชื่ออัตโนมัติหากยังไม่กรอกชื่องาน
+        </label>
+      </div>
+      <div class="input-group">
+        <label class="field-label">
+          <input type="checkbox" id="autoSyncAfterSave" style="width:auto"> Auto sync after save
+        </label>
+      </div>
+      <div class="input-group">
+        <label class="field-label">
+          <input type="checkbox" id="autoLoadOnOpen" style="width:auto"> Auto load from Drive ตอนเปิดหน้า
+        </label>
+      </div>
     </div>
     <div class="inline-note">เฟส 1: ข้อมูลเก็บในเครื่องนี้ (LocalStorage) และย้ายข้ามเครื่องด้วย JSON</div>
     <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
@@ -1401,6 +1420,20 @@ function makeSnapshot() {
   };
 }
 
+function buildSuggestedJobName() {
+  const customer = (document.getElementById('saveCustomerName').value || '').trim() || 'ลูกค้า';
+  const c = calcCostModel();
+  const km = Math.round(c.distance || 0);
+  const mode = (document.getElementById('mapsOriginPreset').value === '13.065831297727314,100.88241036968732') ? 'LCB' : 'งาน';
+  const d = new Date();
+  const stamp = d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2);
+  return customer + ' - ' + mode + ' - ' + km + 'km - ' + stamp;
+}
+
+function suggestJobName() {
+  document.getElementById('saveJobName').value = buildSuggestedJobName();
+}
+
 function applySnapshot(snapshot) {
   if (!snapshot || !snapshot.fieldValues) return;
   Object.keys(snapshot.fieldValues).forEach(function(id) {
@@ -1456,12 +1489,18 @@ function renderSavedJobsList() {
 }
 
 function saveCurrentScenario() {
+  const autoName = !!document.getElementById('autoNameOnSave').checked;
+  if (autoName && !(document.getElementById('saveJobName').value || '').trim()) {
+    suggestJobName();
+  }
   const jobName = (document.getElementById('saveJobName').value || '').trim();
   if (!jobName) { alert('กรุณาใส่ชื่องาน/ลูกค้าก่อนบันทึก'); return; }
+  const customerName = (document.getElementById('saveCustomerName').value || '').trim();
   const tags = (document.getElementById('saveJobTags').value || '').trim();
   const note = (document.getElementById('saveJobNote').value || '').trim();
   const record = {
     id: 'job_' + Date.now(),
+    customerName: customerName,
     jobName: jobName,
     tags: tags,
     note: note,
@@ -1471,13 +1510,19 @@ function saveCurrentScenario() {
   savedJobs.unshift(record);
   persistSavedJobsToStorage();
   renderSavedJobsList();
-  alert('บันทึกงานแล้ว');
+  const autoSync = !!document.getElementById('autoSyncAfterSave').checked;
+  if (autoSync) {
+    syncToDrive(true);
+  } else {
+    alert('บันทึกงานแล้ว');
+  }
 }
 
 function loadSavedJobByIndex(idx) {
   const job = savedJobs[idx];
   if (!job || !job.snapshot) return;
   applySnapshot(job.snapshot);
+  document.getElementById('saveCustomerName').value = job.customerName || '';
   document.getElementById('saveJobName').value = job.jobName || '';
   document.getElementById('saveJobTags').value = job.tags || '';
   document.getElementById('saveJobNote').value = job.note || '';
@@ -1553,7 +1598,10 @@ function importSavedJobsFromText(jsonText) {
 function saveDriveSettings() {
   const payload = {
     url: (document.getElementById('driveScriptUrl').value || '').trim(),
-    secret: (document.getElementById('driveSyncSecret').value || '').trim()
+    secret: (document.getElementById('driveSyncSecret').value || '').trim(),
+    autoSyncAfterSave: !!document.getElementById('autoSyncAfterSave').checked,
+    autoLoadOnOpen: !!document.getElementById('autoLoadOnOpen').checked,
+    autoNameOnSave: !!document.getElementById('autoNameOnSave').checked
   };
   localStorage.setItem(DRIVE_SETTINGS_KEY, JSON.stringify(payload));
   alert('บันทึก URL/Secret ในเครื่องนี้แล้ว');
@@ -1566,6 +1614,9 @@ function loadDriveSettings() {
     const data = JSON.parse(raw);
     if (data.url) document.getElementById('driveScriptUrl').value = data.url;
     if (data.secret) document.getElementById('driveSyncSecret').value = data.secret;
+    if (typeof data.autoSyncAfterSave === 'boolean') document.getElementById('autoSyncAfterSave').checked = data.autoSyncAfterSave;
+    if (typeof data.autoLoadOnOpen === 'boolean') document.getElementById('autoLoadOnOpen').checked = data.autoLoadOnOpen;
+    if (typeof data.autoNameOnSave === 'boolean') document.getElementById('autoNameOnSave').checked = data.autoNameOnSave;
   } catch (e) {}
 }
 
@@ -1577,10 +1628,10 @@ function getDriveSyncPayload() {
   };
 }
 
-async function syncToDrive() {
+async function syncToDrive(silent) {
   const url = (document.getElementById('driveScriptUrl').value || '').trim();
   const secret = (document.getElementById('driveSyncSecret').value || '').trim();
-  if (!url) { alert('กรุณาใส่ Apps Script URL ก่อน'); return; }
+  if (!url) { if (!silent) alert('กรุณาใส่ Apps Script URL ก่อน'); return; }
   const payload = getDriveSyncPayload();
   try {
     const res = await fetch(url, {
@@ -1589,16 +1640,16 @@ async function syncToDrive() {
       body: JSON.stringify({ action: 'save', secret: secret, payload: payload })
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    alert('Sync to Drive สำเร็จ');
+    if (!silent) alert('Sync to Drive สำเร็จ');
   } catch (e) {
-    alert('Sync ไม่สำเร็จ: ' + e.message);
+    if (!silent) alert('Sync ไม่สำเร็จ: ' + e.message);
   }
 }
 
-async function loadFromDrive() {
+async function loadFromDrive(silent) {
   const url = (document.getElementById('driveScriptUrl').value || '').trim();
   const secret = (document.getElementById('driveSyncSecret').value || '').trim();
-  if (!url) { alert('กรุณาใส่ Apps Script URL ก่อน'); return; }
+  if (!url) { if (!silent) alert('กรุณาใส่ Apps Script URL ก่อน'); return; }
   try {
     const q = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'action=load&secret=' + encodeURIComponent(secret);
     const res = await fetch(q, { method: 'GET' });
@@ -1609,9 +1660,9 @@ async function loadFromDrive() {
     savedJobs = incoming;
     persistSavedJobsToStorage();
     renderSavedJobsList();
-    alert('Load from Drive สำเร็จ');
+    if (!silent) alert('Load from Drive สำเร็จ');
   } catch (e) {
-    alert('Load ไม่สำเร็จ: ' + e.message);
+    if (!silent) alert('Load ไม่สำเร็จ: ' + e.message);
   }
 }
 
@@ -1660,6 +1711,9 @@ function initCostModule() {
     });
   }
   renderCostResult();
+  if (document.getElementById('autoLoadOnOpen').checked) {
+    loadFromDrive(true);
+  }
 }
 
 document.getElementById('adjustPercent').addEventListener('input', function() {
