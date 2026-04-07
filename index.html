@@ -1198,8 +1198,45 @@ function buildGoogleMapsRouteUrl() {
   return { ok: true, url: routeUrl };
 }
 
-function openRouteInGoogleMaps() {
-  const r = buildGoogleMapsRouteUrl();
+async function resolveMapsShortLinkIfNeeded(link) {
+  if (!/^https?:\/\/maps\.app\.goo\.gl\//i.test(link || '')) return link;
+  const scriptUrl = (document.getElementById('driveScriptUrl').value || '').trim();
+  const secret = (document.getElementById('driveSyncSecret').value || '').trim();
+  if (!scriptUrl) return link;
+  try {
+    const res = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'resolve_map', secret: secret, shortUrl: link })
+    });
+    if (!res.ok) return link;
+    const data = await res.json();
+    if (data && data.ok && data.resolvedUrl) return data.resolvedUrl;
+  } catch (e) {}
+  return link;
+}
+
+async function buildGoogleMapsRouteUrlAsync() {
+  const originRaw = getMapsOriginValue();
+  const linkRaw = (document.getElementById('mapsDestinationLink').value || '').trim();
+  const directLatLng = extractLatLngFromText(linkRaw);
+  if (!originRaw) return { ok: false, message: 'กรุณาเลือกหรือกรอกต้นทางก่อน' };
+  if (!linkRaw) return { ok: false, message: 'กรุณาวางลิงก์ปลายทางจาก Google Maps' };
+  const normalized = normalizeGoogleMapsLink(linkRaw);
+  const resolved = directLatLng ? normalized : await resolveMapsShortLinkIfNeeded(normalized);
+  const destination = directLatLng || extractDestinationFromGoogleMapsLink(resolved);
+  if (!destination) {
+    return { ok: false, fallbackUrl: resolved, message: 'อ่านปลายทางจากลิงก์ไม่ได้ จะเปิดลิงก์ที่วางโดยตรงแทน' };
+  }
+  const routeUrl = 'https://www.google.com/maps/dir/?api=1&origin=' +
+    encodeURIComponent(originRaw) +
+    '&destination=' + encodeURIComponent(destination) +
+    '&travelmode=driving';
+  return { ok: true, url: routeUrl };
+}
+
+async function openRouteInGoogleMaps() {
+  const r = await buildGoogleMapsRouteUrlAsync();
   if (r.ok) {
     window.open(r.url, '_blank', 'noopener');
     return;
@@ -1213,7 +1250,7 @@ function openRouteInGoogleMaps() {
 }
 
 async function copyRouteLink() {
-  const r = buildGoogleMapsRouteUrl();
+  const r = await buildGoogleMapsRouteUrlAsync();
   const toCopy = r.ok ? r.url : (r.fallbackUrl || '');
   if (!toCopy) {
     alert(r.message || 'ไม่มีลิงก์ให้คัดลอก');
