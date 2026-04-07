@@ -149,6 +149,7 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
 .saved-meta{font-size:.78rem;color:var(--text-light);margin-top:4px}
 .saved-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .inline-note{font-size:.78rem;color:var(--text-light)}
+.hint-box{width:100%;min-height:44px;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;background:#f8fafc;font-size:.9rem;line-height:1.4;word-break:break-word}
 
 @media(max-width:600px){
   .input-row{flex-direction:column;gap:8px}
@@ -351,7 +352,12 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
       <div class="route-list" id="routeList"></div>
       <div class="input-row" style="margin-top:10px">
         <div class="input-group"><label class="field-label">เพิ่มเส้นทางใหม่</label><input type="text" id="newRouteName" placeholder="เช่น YK LCB - ลูกค้า A"></div>
-        <div class="input-group"><label class="field-label">ระยะทาง (กม.)</label><input type="number" id="newRouteDistance" min="0" step="0.1" placeholder="0.0"></div>
+        <div class="input-group"><label class="field-label">ระยะทาง (กม.)</label><input type="text" id="newRouteDistance" placeholder="เช่น 86 หรือ +43*2 หรือ =43*2"></div>
+      </div>
+      <div class="input-group">
+        <label class="field-label">
+          <input type="checkbox" id="newRouteRoundTrip" style="width:auto"> ไป-กลับ (คูณ 2 ให้อัตโนมัติ)
+        </label>
       </div>
       <div class="input-row">
         <div class="input-group">
@@ -368,8 +374,13 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
         <label class="field-label">ลิงก์ปลายทางจาก Google Maps (Share Link)</label>
         <input type="text" id="mapsDestinationLink" placeholder="วางลิงก์แชร์จาก Google Maps">
       </div>
+      <div class="input-group">
+        <label class="field-label">พิกัดปลายทาง (lat,long) - แนะนำเมื่อเป็น short link</label>
+        <input type="text" id="mapsDestinationLatLng" placeholder="เช่น 13.059834649255095,101.19175339667432">
+      </div>
       <div class="mini-actions">
         <button class="btn btn-sm btn-secondary" onclick="openRouteInGoogleMaps()">เปิดเส้นทางใน Google Maps</button>
+        <button class="btn btn-sm btn-secondary" onclick="openRouteFromLatLng()">เปิดเส้นทางจากพิกัดปลายทาง</button>
         <button class="btn btn-sm btn-secondary" onclick="copyRouteLink()">คัดลอกลิงก์เส้นทาง</button>
       </div>
       <button class="btn btn-sm btn-primary" onclick="addRouteSegment()">+ เพิ่มเข้าเส้นทาง</button>
@@ -446,7 +457,11 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
       </div>
       <div class="input-row">
         <div class="input-group"><label class="field-label">ราคาขายลูกค้า (บาท)</label><input type="number" id="customerPrice" min="0" step="1" value="0"></div>
-        <div class="input-group"><label class="field-label">ราคาขายขั้นต่ำ 15% / สวย 30%</label><input type="text" id="priceHints" readonly></div>
+        <div class="input-group"><label class="field-label">ราคาขายขั้นต่ำ 15% / สวย 30%</label><div id="priceHints" class="hint-box"></div></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label class="field-label">% กำไรขั้นต่ำ (เป้า 1)</label><input type="number" id="targetMarginMin" min="0" step="0.1" value="15"></div>
+        <div class="input-group"><label class="field-label">% กำไรสวย (เป้า 2)</label><input type="number" id="targetMarginNice" min="0" step="0.1" value="30"></div>
       </div>
       <div class="input-row">
         <div class="input-group"><label class="field-label">ต้นทุนเงินต่อปี (%)</label><input type="number" id="financeAnnualRate" min="0" step="0.1" value="12"></div>
@@ -457,8 +472,8 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
         <input type="number" id="cashBurdenPercent" min="0" max="100" step="1" value="100">
       </div>
       <div class="mini-actions">
-        <button class="btn btn-sm btn-secondary" onclick="applySuggestedPrice(15)">ใช้ราคา 15%</button>
-        <button class="btn btn-sm btn-secondary" onclick="applySuggestedPrice(30)">ใช้ราคา 30%</button>
+        <button class="btn btn-sm btn-secondary" onclick="applySuggestedPrice('min')">ใช้ราคาเป้า 1</button>
+        <button class="btn btn-sm btn-secondary" onclick="applySuggestedPrice('nice')">ใช้ราคาเป้า 2</button>
       </div>
     </div>
   </div>
@@ -1127,8 +1142,11 @@ function removeRouteSegment(id) {
 function addRouteSegment() {
   const nameEl = document.getElementById('newRouteName');
   const disEl = document.getElementById('newRouteDistance');
+  const rtEl = document.getElementById('newRouteRoundTrip');
   const label = (nameEl.value || '').trim();
-  const distance = ensureNum(disEl.value, NaN);
+  const parsed = parseDistanceExpression(disEl.value);
+  let distance = ensureNum(parsed, NaN);
+  if (rtEl && rtEl.checked && Number.isFinite(distance)) distance = distance * 2;
   if (!label) { alert('กรุณากรอกชื่อเส้นทาง'); return; }
   if (!Number.isFinite(distance) || distance <= 0) { alert('กรุณากรอกระยะทางที่ถูกต้อง'); return; }
   routeSegments.push({ id: 'r' + (routeIdSeq++), label: label, distance: roundN(distance), selected: true, custom: true });
@@ -1190,6 +1208,33 @@ function extractLatLngFromText(text) {
   return m[1] + ',' + m[2];
 }
 
+function parseDistanceExpression(raw) {
+  if (raw === undefined || raw === null) return NaN;
+  let s = String(raw).trim();
+  if (!s) return NaN;
+  if (s.startsWith('=')) s = s.slice(1).trim();
+  if (!s) return NaN;
+  // allow numbers and basic math operators only
+  if (!/^[0-9+\-*/().,\s]+$/.test(s)) return NaN;
+  s = s.replace(/,/g, '.');
+  try {
+    // eslint-disable-next-line no-new-func
+    const val = Function('"use strict";return (' + s + ')')();
+    const num = Number(val);
+    if (!Number.isFinite(num)) return NaN;
+    return num;
+  } catch (e) {
+    return NaN;
+  }
+}
+
+function buildRouteFromOriginAndDestination(originRaw, destinationRaw) {
+  return 'https://www.google.com/maps/dir/?api=1&origin=' +
+    encodeURIComponent(originRaw) +
+    '&destination=' + encodeURIComponent(destinationRaw) +
+    '&travelmode=driving';
+}
+
 function extractLatLngFromMapsData(text) {
   if (!text) return '';
   const s = String(text);
@@ -1239,20 +1284,31 @@ async function resolveMapsShortLinkIfNeeded(link) {
 async function buildGoogleMapsRouteUrlAsync() {
   const originRaw = getMapsOriginValue();
   const linkRaw = (document.getElementById('mapsDestinationLink').value || '').trim();
-  const directLatLng = extractLatLngFromText(linkRaw);
+  const latLngRaw = (document.getElementById('mapsDestinationLatLng').value || '').trim();
+  const directLatLng = extractLatLngFromText(latLngRaw) || extractLatLngFromText(linkRaw);
   if (!originRaw) return { ok: false, message: 'กรุณาเลือกหรือกรอกต้นทางก่อน' };
-  if (!linkRaw) return { ok: false, message: 'กรุณาวางลิงก์ปลายทางจาก Google Maps' };
+  if (!linkRaw && !directLatLng) return { ok: false, message: 'กรุณาวางลิงก์ปลายทางหรือกรอกพิกัดปลายทาง' };
   const normalized = normalizeGoogleMapsLink(linkRaw);
   const resolved = directLatLng ? normalized : await resolveMapsShortLinkIfNeeded(normalized);
   const destination = directLatLng || extractDestinationFromGoogleMapsLink(resolved);
   if (!destination) {
-    return { ok: false, fallbackUrl: resolved, message: 'อ่านปลายทางจากลิงก์ไม่ได้ จะเปิดลิงก์ที่วางโดยตรงแทน' };
+    const extra = /^https?:\/\/maps\.app\.goo\.gl\//i.test(normalized)
+      ? ' (ลิงก์สั้นบางรายการยังอ่านไม่ได้ แนะนำวางพิกัด lat,long)'
+      : '';
+    return { ok: false, fallbackUrl: resolved, message: 'อ่านปลายทางจากลิงก์ไม่ได้ จะเปิดลิงก์ที่วางโดยตรงแทน' + extra };
   }
-  const routeUrl = 'https://www.google.com/maps/dir/?api=1&origin=' +
-    encodeURIComponent(originRaw) +
-    '&destination=' + encodeURIComponent(destination) +
-    '&travelmode=driving';
+  const routeUrl = buildRouteFromOriginAndDestination(originRaw, destination);
   return { ok: true, url: routeUrl };
+}
+
+function openRouteFromLatLng() {
+  const originRaw = getMapsOriginValue();
+  const latLngRaw = (document.getElementById('mapsDestinationLatLng').value || '').trim();
+  const latLng = extractLatLngFromText(latLngRaw);
+  if (!originRaw) { alert('กรุณาเลือกหรือกรอกต้นทางก่อน'); return; }
+  if (!latLng) { alert('กรุณากรอกพิกัดปลายทางแบบ lat,long'); return; }
+  const routeUrl = buildRouteFromOriginAndDestination(originRaw, latLng);
+  window.open(routeUrl, '_blank', 'noopener');
 }
 
 async function openRouteInGoogleMaps() {
@@ -1330,6 +1386,8 @@ function calcCostModel() {
   const includeShoreCost = !!document.getElementById('includeShoreCost').checked;
   const shoreCost = includeShoreCost ? getVal('shoreCost', 0) : 0;
   const customerPrice = getVal('customerPrice', 0);
+  const targetMarginMin = Math.max(0, getVal('targetMarginMin', 15));
+  const targetMarginNice = Math.max(0, getVal('targetMarginNice', 30));
   const financeAnnualRate = getVal('financeAnnualRate', 0);
   const customerCreditDays = getVal('customerCreditDays', 0);
   const cashBurdenPercent = Math.min(100, Math.max(0, getVal('cashBurdenPercent', 100)));
@@ -1353,10 +1411,12 @@ function calcCostModel() {
   const financedBaseCost = totalCost * (cashBurdenPercent / 100);
   const financeCost = financedBaseCost * (financeAnnualRate / 100) * (customerCreditDays / 365);
   const totalCostWithFinance = totalCost + financeCost;
-  const suggested15 = totalCost * 1.15;
-  const suggested30 = totalCost * 1.30;
-  const suggested15AfterFinance = totalCostWithFinance * 1.15;
-  const suggested30AfterFinance = totalCostWithFinance * 1.30;
+  const mulMin = 1 + (targetMarginMin / 100);
+  const mulNice = 1 + (targetMarginNice / 100);
+  const suggested15 = totalCost * mulMin;
+  const suggested30 = totalCost * mulNice;
+  const suggested15AfterFinance = totalCostWithFinance * mulMin;
+  const suggested30AfterFinance = totalCostWithFinance * mulNice;
   const profitAmount = customerPrice - totalCost;
   const marginPct = customerPrice > 0 ? (profitAmount / customerPrice) * 100 : 0;
   const profitAfterFinance = customerPrice - totalCostWithFinance;
@@ -1368,14 +1428,14 @@ function calcCostModel() {
   return {
     distance, liters, fuelCost, driverDailyCost, vehicleInsuranceCost, cargoInsuranceCost, depreciationCost,
     fixedDailyCost, tripCost, maintenanceCost, beforeBackOffice, backOfficeCost, totalCost, financeCost, totalCostWithFinance,
-    suggested15, suggested30, suggested15AfterFinance, suggested30AfterFinance, customerPrice,
+    suggested15, suggested30, suggested15AfterFinance, suggested30AfterFinance, targetMarginMin, targetMarginNice, customerPrice,
     profitAmount, marginPct, profitAfterFinance, marginAfterFinancePct, fuelPctOfSale, driverPctOfSale, maintenancePctOfSale, includeShoreCost
   };
 }
 
 function applySuggestedPrice(level) {
   const c = calcCostModel();
-  if (level === 15) setVal('customerPrice', Math.round(c.suggested15AfterFinance));
+  if (level === 'min') setVal('customerPrice', Math.round(c.suggested15AfterFinance));
   else setVal('customerPrice', Math.round(c.suggested30AfterFinance));
   renderCostResult();
 }
@@ -1384,35 +1444,40 @@ function renderCostResult() {
   const c = calcCostModel();
   setVal('fuelLiters', c.liters.toFixed(2));
   setVal('fuelCost', c.fuelCost.toFixed(2));
-  const hints = '15%: ' + fmt(c.suggested15AfterFinance) + ' บาท | 30%: ' + fmt(c.suggested30AfterFinance) + ' บาท';
+  const hints = c.targetMarginMin.toFixed(1) + '%: ' + fmt(c.suggested15AfterFinance) + ' บาท | ' + c.targetMarginNice.toFixed(1) + '%: ' + fmt(c.suggested30AfterFinance) + ' บาท';
   const hintsEl = document.getElementById('priceHints');
-  if (hintsEl) hintsEl.value = hints;
+  if (hintsEl) hintsEl.textContent = hints;
 
   const kpiWrap = document.getElementById('costKpiCards');
   if (kpiWrap) {
     kpiWrap.innerHTML =
       '<div class="kpi"><div class="k-label">ต้นทุนรวม/เที่ยว</div><div class="k-value">' + fmt(c.totalCost) + '</div></div>' +
       '<div class="kpi"><div class="k-label">ต้นทุนการเงิน/เที่ยว</div><div class="k-value">' + fmt(c.financeCost) + '</div></div>' +
-      '<div class="kpi"><div class="k-label">ราคาขายขั้นต่ำ 15%</div><div class="k-value">' + fmt(c.suggested15) + '</div></div>' +
-      '<div class="kpi"><div class="k-label">ราคาขายสวย 30%</div><div class="k-value">' + fmt(c.suggested30) + '</div></div>' +
+      '<div class="kpi"><div class="k-label">ราคาขายเป้า 1 (' + c.targetMarginMin.toFixed(1) + '%)</div><div class="k-value">' + fmt(c.suggested15AfterFinance) + '</div></div>' +
+      '<div class="kpi"><div class="k-label">ราคาขายเป้า 2 (' + c.targetMarginNice.toFixed(1) + '%)</div><div class="k-value">' + fmt(c.suggested30AfterFinance) + '</div></div>' +
       '<div class="kpi"><div class="k-label">% น้ำมันต่อราคาขาย</div><div class="k-value">' + c.fuelPctOfSale.toFixed(2) + '%</div></div>' +
       '<div class="kpi"><div class="k-label">% ซ่อมบำรุงต่อราคาขาย</div><div class="k-value">' + c.maintenancePctOfSale.toFixed(2) + '%</div></div>' +
       '<div class="kpi"><div class="k-label">% คนขับต่อราคาขาย</div><div class="k-value">' + c.driverPctOfSale.toFixed(2) + '%</div></div>' +
+      '<div class="kpi"><div class="k-label">% กำไรก่อนการเงิน</div><div class="k-value">' + c.marginPct.toFixed(2) + '%</div></div>' +
       '<div class="kpi"><div class="k-label">% Margin หลังต้นทุนการเงิน</div><div class="k-value">' + c.marginAfterFinancePct.toFixed(2) + '%</div></div>';
   }
 
   const bd = document.getElementById('costBreakdownWrap');
   if (bd) {
-    bd.innerHTML = '<table><thead><tr><th>รายการ</th><th>จำนวนเงิน (บาท)</th><th>% ของต้นทุนรวม</th></tr></thead><tbody>' +
-      '<tr><td>ค่าน้ำมัน</td><td>' + fmt(c.fuelCost) + '</td><td>' + (c.totalCost > 0 ? ((c.fuelCost / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
-      '<tr><td>ค่าแรง+ดูแลรถ (ตามวันทำงาน)</td><td>' + fmt(c.driverDailyCost) + '</td><td>' + (c.totalCost > 0 ? ((c.driverDailyCost / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
-      '<tr><td>ประกันรถ + ประกันสินค้า + สึกหรอ</td><td>' + fmt(c.vehicleInsuranceCost + c.cargoInsuranceCost + c.depreciationCost) + '</td><td>' + (c.totalCost > 0 ? (((c.vehicleInsuranceCost + c.cargoInsuranceCost + c.depreciationCost) / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
-      '<tr><td>ซ่อมบำรุง + ยาง + อะไหล่</td><td>' + fmt(c.maintenanceCost) + '</td><td>' + (c.totalCost > 0 ? ((c.maintenanceCost / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
-      '<tr><td>ค่าเที่ยว + ทางด่วน + ชอร์</td><td>' + fmt(c.tripCost) + '</td><td>' + (c.totalCost > 0 ? ((c.tripCost / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
-      '<tr><td>Back Office/อื่นๆ</td><td>' + fmt(c.backOfficeCost) + '</td><td>' + (c.totalCost > 0 ? ((c.backOfficeCost / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
-      '<tr><td>ต้นทุนการเงิน (เครดิตลูกค้า)</td><td>' + fmt(c.financeCost) + '</td><td>' + (c.totalCostWithFinance > 0 ? ((c.financeCost / c.totalCostWithFinance) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
-      '<tr><td><strong>ต้นทุนรวม</strong></td><td><strong>' + fmt(c.totalCost) + '</strong></td><td>100.00%</td></tr>' +
-      '<tr><td><strong>ต้นทุนรวมหลังการเงิน</strong></td><td><strong>' + fmt(c.totalCostWithFinance) + '</strong></td><td>100.00%</td></tr>' +
+    const pctOfSale = function(amount) {
+      if (c.customerPrice <= 0) return '-';
+      return ((amount / c.customerPrice) * 100).toFixed(2) + '%';
+    };
+    bd.innerHTML = '<table><thead><tr><th>รายการ</th><th>จำนวนเงิน (บาท)</th><th>% ของราคาขายลูกค้า</th></tr></thead><tbody>' +
+      '<tr><td>ค่าน้ำมัน</td><td>' + fmt(c.fuelCost) + '</td><td>' + pctOfSale(c.fuelCost) + '</td></tr>' +
+      '<tr><td>ค่าแรง+ดูแลรถ (ตามวันทำงาน)</td><td>' + fmt(c.driverDailyCost) + '</td><td>' + pctOfSale(c.driverDailyCost) + '</td></tr>' +
+      '<tr><td>ประกันรถ + ประกันสินค้า + สึกหรอ</td><td>' + fmt(c.vehicleInsuranceCost + c.cargoInsuranceCost + c.depreciationCost) + '</td><td>' + pctOfSale(c.vehicleInsuranceCost + c.cargoInsuranceCost + c.depreciationCost) + '</td></tr>' +
+      '<tr><td>ซ่อมบำรุง + ยาง + อะไหล่</td><td>' + fmt(c.maintenanceCost) + '</td><td>' + pctOfSale(c.maintenanceCost) + '</td></tr>' +
+      '<tr><td>ค่าเที่ยว + ทางด่วน + ชอร์</td><td>' + fmt(c.tripCost) + '</td><td>' + pctOfSale(c.tripCost) + '</td></tr>' +
+      '<tr><td>Back Office/อื่นๆ</td><td>' + fmt(c.backOfficeCost) + '</td><td>' + pctOfSale(c.backOfficeCost) + '</td></tr>' +
+      '<tr><td>ต้นทุนการเงิน (เครดิตลูกค้า)</td><td>' + fmt(c.financeCost) + '</td><td>' + pctOfSale(c.financeCost) + '</td></tr>' +
+      '<tr><td><strong>ต้นทุนรวม</strong></td><td><strong>' + fmt(c.totalCost) + '</strong></td><td>' + pctOfSale(c.totalCost) + '</td></tr>' +
+      '<tr><td><strong>ต้นทุนรวมหลังการเงิน</strong></td><td><strong>' + fmt(c.totalCostWithFinance) + '</strong></td><td>' + pctOfSale(c.totalCostWithFinance) + '</td></tr>' +
       '<tr><td>กำไรก่อนการเงิน</td><td>' + fmt(c.profitAmount) + '</td><td>' + c.marginPct.toFixed(2) + '%</td></tr>' +
       '<tr><td><strong>กำไรหลังการเงิน</strong></td><td><strong>' + fmt(c.profitAfterFinance) + '</strong></td><td><strong>' + c.marginAfterFinancePct.toFixed(2) + '%</strong></td></tr>' +
       '</tbody></table>';
@@ -1420,7 +1485,7 @@ function renderCostResult() {
 
   const warnings = [];
   if (getVal('fuelEfficiency', 0) <= 0) warnings.push({ cls: 'bad', text: 'เรทน้ำมันต้องมากกว่า 0 กม./ลิตร' });
-  if (c.customerPrice > 0 && c.marginAfterFinancePct < 15) warnings.push({ cls: 'bad', text: 'กำไรหลังต้นทุนการเงินต่ำกว่าเกณฑ์ขั้นต่ำ 15%' });
+  if (c.customerPrice > 0 && c.marginAfterFinancePct < c.targetMarginMin) warnings.push({ cls: 'bad', text: 'กำไรหลังต้นทุนการเงินต่ำกว่าเกณฑ์ขั้นต่ำ ' + c.targetMarginMin.toFixed(1) + '%' });
   if (c.customerPrice > 0 && c.fuelPctOfSale > 60) warnings.push({ cls: 'bad', text: '%น้ำมันสูงเกิน 60% ของราคาขาย' });
   else if (c.customerPrice > 0 && c.fuelPctOfSale > 50) warnings.push({ cls: 'warn', text: '%น้ำมันเกิน 50% ของราคาขาย ควรเฝ้าระวัง' });
   if (c.customerPrice > 0 && c.maintenancePctOfSale > 12) warnings.push({ cls: 'warn', text: '%ซ่อมบำรุงสูงเกิน 12% ของราคาขาย ควรทบทวนเรท/อายุรถ/เส้นทาง' });
@@ -1441,8 +1506,8 @@ function getScenarioInputIds() {
     'fuelEfficiency', 'costFuelPrice', 'workingDays', 'backOfficePercent', 'monthlySalary', 'monthlyCare',
     'annualVehicleInsurance', 'annualCargoInsurance', 'insuranceWorkDaysPerMonth', 'assetValue', 'depreciationYears',
     'tripAllowance', 'tollCost', 'maintenanceMode', 'maintenanceRate', 'includeShoreCost', 'shoreCost',
-    'customerPrice', 'financeAnnualRate', 'customerCreditDays', 'cashBurdenPercent', 'mapsOriginPreset',
-    'mapsOriginCustom', 'mapsDestinationLink'
+    'customerPrice', 'targetMarginMin', 'targetMarginNice', 'financeAnnualRate', 'customerCreditDays', 'cashBurdenPercent', 'mapsOriginPreset',
+    'mapsOriginCustom', 'mapsDestinationLink', 'mapsDestinationLatLng'
   ];
 }
 
@@ -1727,7 +1792,7 @@ function setupCostInputs() {
   const ids = [
     'fuelEfficiency', 'costFuelPrice', 'workingDays', 'backOfficePercent', 'monthlySalary', 'monthlyCare',
     'annualVehicleInsurance', 'annualCargoInsurance', 'insuranceWorkDaysPerMonth', 'assetValue', 'depreciationYears', 'tripAllowance',
-    'tollCost', 'maintenanceMode', 'maintenanceRate', 'shoreCost', 'customerPrice', 'financeAnnualRate', 'customerCreditDays', 'cashBurdenPercent', 'includeShoreCost'
+    'tollCost', 'maintenanceMode', 'maintenanceRate', 'shoreCost', 'customerPrice', 'targetMarginMin', 'targetMarginNice', 'financeAnnualRate', 'customerCreditDays', 'cashBurdenPercent', 'includeShoreCost'
   ];
   ids.forEach(function(id) {
     const el = document.getElementById(id);
@@ -1743,6 +1808,22 @@ function setupCostInputs() {
         cf.value = mainFuel.value;
       }
       renderCostResult();
+    });
+  }
+
+  const newRouteDistance = document.getElementById('newRouteDistance');
+  if (newRouteDistance) {
+    newRouteDistance.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const v = parseDistanceExpression(newRouteDistance.value);
+      if (!Number.isFinite(v)) {
+        alert('สูตรระยะทางไม่ถูกต้อง (ตัวอย่าง: 43*2 หรือ =43*2)');
+        return;
+      }
+      const rt = document.getElementById('newRouteRoundTrip');
+      const out = (rt && rt.checked) ? v * 2 : v;
+      newRouteDistance.value = roundN(out);
     });
   }
 }
