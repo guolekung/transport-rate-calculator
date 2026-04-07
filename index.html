@@ -124,6 +124,32 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
 .bangchak-iframe-wrap iframe{display:block;margin:0 auto;width:320px;max-width:100%;height:280px;border:0;vertical-align:middle}
 .bangchak-scroll-hint{text-align:center;font-size:.72rem;color:var(--text-light);margin:0 0 12px;line-height:1.4}
 
+.cost-section{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:28px;width:100%;max-width:900px;margin-top:20px}
+.cost-section h2{font-size:1.2rem;color:var(--primary);margin-bottom:6px}
+.cost-desc{font-size:.85rem;color:var(--text-light);margin-bottom:18px}
+.cost-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.cost-block{border:1px solid var(--border);border-radius:10px;padding:14px;background:#fff}
+.cost-block h3{font-size:.95rem;color:var(--primary);margin-bottom:10px}
+.mini-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.route-list{max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px}
+.route-item{display:grid;grid-template-columns:auto 1fr 100px auto;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed #e5e7eb}
+.route-item:last-child{border-bottom:none}
+.route-item label{font-size:.82rem}
+.route-item input[type=number]{padding:6px 8px;font-size:.82rem}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:12px}
+.kpi{background:var(--primary-lighter);border-radius:10px;padding:12px}
+.kpi .k-label{font-size:.72rem;color:var(--text-light)}
+.kpi .k-value{font-size:1rem;font-weight:700;color:var(--primary)}
+.cost-warning{margin-top:10px;font-size:.82rem;padding:8px 10px;border-radius:8px;border:1px solid transparent}
+.cost-warning.warn{background:#fffbeb;border-color:#fde68a;color:#92400e}
+.cost-warning.bad{background:#fef2f2;border-color:#fecaca;color:#991b1b}
+.saved-list{margin-top:10px;border:1px solid var(--border);border-radius:10px;max-height:250px;overflow:auto}
+.saved-item{padding:10px;border-bottom:1px dashed #e5e7eb}
+.saved-item:last-child{border-bottom:none}
+.saved-meta{font-size:.78rem;color:var(--text-light);margin-top:4px}
+.saved-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.inline-note{font-size:.78rem;color:var(--text-light)}
+
 @media(max-width:600px){
   .input-row{flex-direction:column;gap:8px}
   .radio-group{flex-direction:column}
@@ -131,6 +157,8 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
   .btn{width:100%;text-align:center}
   .result-header{flex-direction:column;align-items:flex-start}
   .summary-cards{grid-template-columns:1fr 1fr}
+  .cost-grid{grid-template-columns:1fr}
+  .route-item{grid-template-columns:auto 1fr}
 }
 </style>
 </head>
@@ -308,6 +336,171 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
   </div>
 </div>
 
+<div class="cost-section" id="costSection">
+  <h2>คำนวณต้นทุน (รอบแรกแบบครบหมวด)</h2>
+  <p class="cost-desc">คำนวณจากระยะทาง + น้ำมัน + ต้นทุนคงที่ + ค่าเที่ยว/ทางด่วน เพื่อดูต้นทุนรวมและความคุ้มของราคาขาย</p>
+
+  <div class="cost-grid">
+    <div class="cost-block">
+      <h3>1) ระยะทางเส้นทางงาน</h3>
+      <div class="mini-actions">
+        <button class="btn btn-sm btn-accent" onclick="loadRoutePreset('import')">Preset Import LCB</button>
+        <button class="btn btn-sm btn-accent" onclick="loadRoutePreset('export')">Preset Export LCB</button>
+        <button class="btn btn-sm btn-secondary" onclick="resetRouteSegments()">รีเซ็ตเส้นทาง</button>
+      </div>
+      <div class="route-list" id="routeList"></div>
+      <div class="input-row" style="margin-top:10px">
+        <div class="input-group"><label class="field-label">เพิ่มเส้นทางใหม่</label><input type="text" id="newRouteName" placeholder="เช่น YK LCB - ลูกค้า A"></div>
+        <div class="input-group"><label class="field-label">ระยะทาง (กม.)</label><input type="number" id="newRouteDistance" min="0" step="0.1" placeholder="0.0"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group">
+          <label class="field-label">ต้นทางสำหรับเปิด Google Maps</label>
+          <select id="mapsOriginPreset">
+            <option value="13.065831297727314,100.88241036968732">ท่าเรือแหลมฉบัง (Default)</option>
+            <option value="13.083619219403579,100.97887836175586">ลานจอด YK LCB</option>
+            <option value="custom">กำหนดต้นทางเอง</option>
+          </select>
+        </div>
+        <div class="input-group"><label class="field-label">ต้นทางเอง (พิมพ์ที่อยู่/พิกัด)</label><input type="text" id="mapsOriginCustom" placeholder="เช่น 13.0800,100.8800 หรือ ที่อยู่ต้นทาง"></div>
+      </div>
+      <div class="input-group">
+        <label class="field-label">ลิงก์ปลายทางจาก Google Maps (Share Link)</label>
+        <input type="text" id="mapsDestinationLink" placeholder="วางลิงก์แชร์จาก Google Maps">
+      </div>
+      <div class="mini-actions">
+        <button class="btn btn-sm btn-secondary" onclick="openRouteInGoogleMaps()">เปิดเส้นทางใน Google Maps</button>
+        <button class="btn btn-sm btn-secondary" onclick="copyRouteLink()">คัดลอกลิงก์เส้นทาง</button>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="addRouteSegment()">+ เพิ่มเข้าเส้นทาง</button>
+      <div class="input-group" style="margin-top:10px">
+        <label class="field-label">ระยะทางรวมที่เลือก</label>
+        <div class="input-suffix"><input type="number" id="totalDistance" readonly><span>กม.</span></div>
+      </div>
+    </div>
+
+    <div class="cost-block">
+      <h3>2) ตัวแปรน้ำมัน</h3>
+      <div class="mini-actions">
+        <button class="btn btn-sm btn-secondary" onclick="syncFuelPriceFromMain()">ใช้ราคาน้ำมันจากด้านบน</button>
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label class="field-label">เรทน้ำมัน (กม./ลิตร)</label><input type="number" id="fuelEfficiency" min="0" step="0.01" value="2.6"></div>
+        <div class="input-group"><label class="field-label">ราคาน้ำมัน (บาท/ลิตร)</label><input type="number" id="costFuelPrice" min="0" step="0.01"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label class="field-label">จำนวนลิตร</label><input type="number" id="fuelLiters" readonly></div>
+        <div class="input-group"><label class="field-label">ค่าน้ำมัน (บาท)</label><input type="number" id="fuelCost" readonly></div>
+      </div>
+    </div>
+
+    <div class="cost-block">
+      <h3>3) ต้นทุนรายวัน/คงที่</h3>
+      <div class="input-row">
+        <div class="input-group"><label class="field-label">วันทำงานของงาน</label><input type="number" id="workingDays" min="0" step="0.1" value="1"></div>
+        <div class="input-group"><label class="field-label">Back Office/อื่นๆ (%)</label><input type="number" id="backOfficePercent" min="0" step="0.1" value="15"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label class="field-label">เงินเดือน/เดือน</label><input type="number" id="monthlySalary" min="0" step="1" value="9240"></div>
+        <div class="input-group"><label class="field-label">ค่าดูแลรถ/เดือน</label><input type="number" id="monthlyCare" min="0" step="1" value="3000"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label class="field-label">ประกันรถ/ปี</label><input type="number" id="annualVehicleInsurance" min="0" step="1" value="42000"></div>
+        <div class="input-group"><label class="field-label">ประกันสินค้า/ปี</label><input type="number" id="annualCargoInsurance" min="0" step="1" value="13500"></div>
+      </div>
+      <div class="input-group">
+        <label class="field-label">ฐานวันทำงานสำหรับคิดประกัน (วัน/เดือน)</label>
+        <input type="number" id="insuranceWorkDaysPerMonth" min="1" step="1" value="24">
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label class="field-label">มูลค่ารถ+หาง (บาท)</label><input type="number" id="assetValue" min="0" step="1" value="2000000"></div>
+        <div class="input-group"><label class="field-label">อายุคิดสึกหรอ (ปี)</label><input type="number" id="depreciationYears" min="1" step="1" value="8"></div>
+      </div>
+    </div>
+
+    <div class="cost-block">
+      <h3>4) ต้นทุนรายเที่ยว + ราคาขาย</h3>
+      <div class="input-row">
+        <div class="input-group"><label class="field-label">ค่าเที่ยว (บาท)</label><input type="number" id="tripAllowance" min="0" step="1" value="0"></div>
+        <div class="input-group"><label class="field-label">ค่าทางด่วน (บาท)</label><input type="number" id="tollCost" min="0" step="1" value="0"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group">
+          <label class="field-label">วิธีคิดค่าซ่อมบำรุง</label>
+          <select id="maintenanceMode">
+            <option value="per_km" selected>บาท/กม.</option>
+            <option value="pct_fuel">% ของค่าน้ำมัน</option>
+          </select>
+        </div>
+        <div class="input-group"><label class="field-label">ค่าซ่อมบำรุง (บาท/กม. หรือ %)</label><input type="number" id="maintenanceRate" min="0" step="0.1" value="5.0"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group">
+          <label class="field-label">ค่าทำชอร์</label>
+          <div class="input-suffix">
+            <input type="checkbox" id="includeShoreCost" checked style="width:auto">
+            <span>คิดค่าทำชอร์</span>
+          </div>
+        </div>
+        <div class="input-group"><label class="field-label">ค่าทำชอร์ (บาท/เที่ยว)</label><input type="number" id="shoreCost" min="0" step="1" value="100"></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label class="field-label">ราคาขายลูกค้า (บาท)</label><input type="number" id="customerPrice" min="0" step="1" value="0"></div>
+        <div class="input-group"><label class="field-label">ราคาขายขั้นต่ำ 15% / สวย 30%</label><input type="text" id="priceHints" readonly></div>
+      </div>
+      <div class="input-row">
+        <div class="input-group"><label class="field-label">ต้นทุนเงินต่อปี (%)</label><input type="number" id="financeAnnualRate" min="0" step="0.1" value="12"></div>
+        <div class="input-group"><label class="field-label">เครดิตลูกค้า (วัน)</label><input type="number" id="customerCreditDays" min="0" step="1" value="45"></div>
+      </div>
+      <div class="input-group">
+        <label class="field-label">สัดส่วนต้นทุนที่ต้องสำรองเงินสดเอง (%)</label>
+        <input type="number" id="cashBurdenPercent" min="0" max="100" step="1" value="100">
+      </div>
+      <div class="mini-actions">
+        <button class="btn btn-sm btn-secondary" onclick="applySuggestedPrice(15)">ใช้ราคา 15%</button>
+        <button class="btn btn-sm btn-secondary" onclick="applySuggestedPrice(30)">ใช้ราคา 30%</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpi-grid" id="costKpiCards"></div>
+  <div id="costBreakdownWrap" style="margin-top:12px"></div>
+  <div id="costWarningBox"></div>
+
+  <div class="cost-block" style="margin-top:14px">
+    <h3>5) บันทึกงาน + ซิงก์ Google Drive</h3>
+    <div class="input-row">
+      <div class="input-group"><label class="field-label">ชื่องาน/ลูกค้า</label><input type="text" id="saveJobName" placeholder="เช่น ลูกค้า A - โรงงาน B"></div>
+      <div class="input-group"><label class="field-label">แท็ก</label><input type="text" id="saveJobTags" placeholder="เช่น LCB, import, ใกล้เคียง"></div>
+    </div>
+    <div class="input-group">
+      <label class="field-label">หมายเหตุ</label>
+      <input type="text" id="saveJobNote" placeholder="เช่น ลูกค้าขอเครดิต 60 วัน">
+    </div>
+    <div class="mini-actions">
+      <button class="btn btn-sm btn-primary" onclick="saveCurrentScenario()">บันทึกงานนี้</button>
+      <button class="btn btn-sm btn-secondary" onclick="exportSavedJobsJson()">Export JSON</button>
+      <button class="btn btn-sm btn-secondary" onclick="triggerImportSavedJobs()">Import JSON</button>
+      <button class="btn btn-sm btn-danger" onclick="clearAllSavedJobs()">ล้างประวัติทั้งหมด</button>
+    </div>
+    <div class="inline-note">เฟส 1: ข้อมูลเก็บในเครื่องนี้ (LocalStorage) และย้ายข้ามเครื่องด้วย JSON</div>
+    <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
+    <div class="input-row">
+      <div class="input-group"><label class="field-label">Apps Script Web App URL (เฟส 2)</label><input type="text" id="driveScriptUrl" placeholder="https://script.google.com/macros/s/.../exec"></div>
+      <div class="input-group"><label class="field-label">Secret (ถ้ามี)</label><input type="text" id="driveSyncSecret" placeholder="optional"></div>
+    </div>
+    <div class="mini-actions">
+      <button class="btn btn-sm btn-accent" onclick="syncToDrive()">Sync to Drive</button>
+      <button class="btn btn-sm btn-accent" onclick="loadFromDrive()">Load from Drive</button>
+      <button class="btn btn-sm btn-secondary" onclick="saveDriveSettings()">จำค่า URL/Secret ในเครื่อง</button>
+    </div>
+    <div class="inline-note">เฟส 2: กดซิงก์เพื่อแชร์ข้อมูลเดียวกันระหว่าง PC และ iPhone</div>
+    <div class="saved-list" id="savedJobsList"></div>
+  </div>
+</div>
+
+<input type="file" id="savedJobsFileInput" accept=".json,application/json" style="display:none">
+
 <div class="watermark">&copy; Transport Rate Calculator</div>
 
 <script>
@@ -319,6 +512,11 @@ let rangeType = 'uniform';
 let pctMode = 'per_baht'; // per_baht: คิด % ต่อราคาน้ำมันเพิ่ม 1 บาท, per_step: คิด % ต่อจำนวนช่วง
 let resultData = [];
 let baseSelectHasInitialized = false; // ตั้งค่าเริ่มต้น Base Rate ให้ตรงกับ “ราคาน้ำมันปัจจุบัน” ครั้งแรกที่เข้าขั้น
+let routeSegments = [];
+let routeIdSeq = 1;
+const SAVED_JOBS_KEY = 'yk_saved_jobs_v1';
+const DRIVE_SETTINGS_KEY = 'yk_drive_sync_settings_v1';
+let savedJobs = [];
 
 function goStep(step) {
   if (!validateStep(currentStep, step)) return;
@@ -840,6 +1038,630 @@ function todayStr() {
   return d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2);
 }
 
+function baseRouteSegments() {
+  return [
+    { id: 'r' + (routeIdSeq++), label: 'ลานจอด YK LCB - ท่าเรือ LCB', distance: 16, selected: false, custom: false },
+    { id: 'r' + (routeIdSeq++), label: 'ลานรับตู้เปล่า - ลานจอด YK LCB', distance: 20, selected: false, custom: false },
+    { id: 'r' + (routeIdSeq++), label: 'ลานจอด YK LCB - ลานรับตู้เปล่า', distance: 20, selected: false, custom: false },
+    { id: 'r' + (routeIdSeq++), label: 'ท่าเรือ LCB - ลานจอด YK LCB', distance: 16, selected: false, custom: false }
+  ];
+}
+
+function ensureNum(v, fallback) {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function setVal(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val;
+}
+
+function getVal(id, fallback) {
+  const el = document.getElementById(id);
+  if (!el) return fallback;
+  return ensureNum(el.value, fallback);
+}
+
+function renderRouteList() {
+  const wrap = document.getElementById('routeList');
+  if (!wrap) return;
+  wrap.innerHTML = routeSegments.map(function(seg) {
+    return '<div class="route-item">' +
+      '<input type="checkbox" ' + (seg.selected ? 'checked' : '') + ' onchange="toggleRouteSegment(\'' + seg.id + '\', this.checked)">' +
+      '<label>' + seg.label + '</label>' +
+      '<input type="number" min="0" step="0.1" value="' + seg.distance + '" onchange="updateRouteDistance(\'' + seg.id + '\', this.value)">' +
+      (seg.custom ? '<button class="btn btn-sm btn-danger" onclick="removeRouteSegment(\'' + seg.id + '\')">ลบ</button>' : '<span></span>') +
+      '</div>';
+  }).join('');
+}
+
+function recalcDistance() {
+  const total = routeSegments.reduce(function(sum, seg) {
+    if (!seg.selected) return sum;
+    return sum + ensureNum(seg.distance, 0);
+  }, 0);
+  setVal('totalDistance', roundN(total));
+  return total;
+}
+
+function toggleRouteSegment(id, checked) {
+  const seg = routeSegments.find(function(x) { return x.id === id; });
+  if (!seg) return;
+  seg.selected = !!checked;
+  renderCostResult();
+}
+
+function updateRouteDistance(id, distance) {
+  const seg = routeSegments.find(function(x) { return x.id === id; });
+  if (!seg) return;
+  seg.distance = Math.max(0, ensureNum(distance, 0));
+  renderCostResult();
+}
+
+function removeRouteSegment(id) {
+  routeSegments = routeSegments.filter(function(x) { return x.id !== id; });
+  renderRouteList();
+  renderCostResult();
+}
+
+function addRouteSegment() {
+  const nameEl = document.getElementById('newRouteName');
+  const disEl = document.getElementById('newRouteDistance');
+  const label = (nameEl.value || '').trim();
+  const distance = ensureNum(disEl.value, NaN);
+  if (!label) { alert('กรุณากรอกชื่อเส้นทาง'); return; }
+  if (!Number.isFinite(distance) || distance <= 0) { alert('กรุณากรอกระยะทางที่ถูกต้อง'); return; }
+  routeSegments.push({ id: 'r' + (routeIdSeq++), label: label, distance: roundN(distance), selected: true, custom: true });
+  nameEl.value = '';
+  disEl.value = '';
+  renderRouteList();
+  renderCostResult();
+}
+
+function getMapsOriginValue() {
+  const preset = document.getElementById('mapsOriginPreset');
+  const custom = document.getElementById('mapsOriginCustom');
+  if (!preset) return '';
+  if (preset.value === 'custom') return (custom && custom.value ? custom.value.trim() : '');
+  return preset.value;
+}
+
+function normalizeGoogleMapsLink(url) {
+  if (!url) return '';
+  const v = url.trim();
+  if (!v) return '';
+  if (/^https?:\/\//i.test(v)) return v;
+  return 'https://' + v;
+}
+
+function extractDestinationFromGoogleMapsLink(link) {
+  try {
+    const rawLatLng = extractLatLngFromText(link);
+    if (rawLatLng) return rawLatLng;
+    const u = new URL(link);
+    const q = u.searchParams.get('q');
+    if (q) return q;
+    const dest = u.searchParams.get('destination');
+    if (dest) return dest;
+    const dirMatch = u.pathname.match(/\/dir\/([^/]+)\/([^/]+)/i);
+    if (dirMatch && dirMatch[2]) return decodeURIComponent(dirMatch[2]);
+    const atMatch = u.pathname.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (atMatch) return atMatch[1] + ',' + atMatch[2];
+    return '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function extractLatLngFromText(text) {
+  if (!text) return '';
+  const m = String(text).match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+  if (!m) return '';
+  return m[1] + ',' + m[2];
+}
+
+function buildGoogleMapsRouteUrl() {
+  const originRaw = getMapsOriginValue();
+  const linkRaw = (document.getElementById('mapsDestinationLink').value || '').trim();
+  const directLatLng = extractLatLngFromText(linkRaw);
+  const link = normalizeGoogleMapsLink(linkRaw);
+  if (!originRaw) return { ok: false, message: 'กรุณาเลือกหรือกรอกต้นทางก่อน' };
+  if (!linkRaw) return { ok: false, message: 'กรุณาวางลิงก์ปลายทางจาก Google Maps' };
+  const destination = directLatLng || extractDestinationFromGoogleMapsLink(link);
+  if (!destination) {
+    return { ok: false, fallbackUrl: link, message: 'อ่านปลายทางจากลิงก์ไม่ได้ จะเปิดลิงก์ที่วางโดยตรงแทน' };
+  }
+  const routeUrl = 'https://www.google.com/maps/dir/?api=1&origin=' +
+    encodeURIComponent(originRaw) +
+    '&destination=' + encodeURIComponent(destination) +
+    '&travelmode=driving';
+  return { ok: true, url: routeUrl };
+}
+
+function openRouteInGoogleMaps() {
+  const r = buildGoogleMapsRouteUrl();
+  if (r.ok) {
+    window.open(r.url, '_blank', 'noopener');
+    return;
+  }
+  if (r.fallbackUrl) {
+    alert(r.message);
+    window.open(r.fallbackUrl, '_blank', 'noopener');
+    return;
+  }
+  alert(r.message || 'ไม่สามารถเปิด Google Maps ได้');
+}
+
+async function copyRouteLink() {
+  const r = buildGoogleMapsRouteUrl();
+  const toCopy = r.ok ? r.url : (r.fallbackUrl || '');
+  if (!toCopy) {
+    alert(r.message || 'ไม่มีลิงก์ให้คัดลอก');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(toCopy);
+    alert(r.ok ? 'คัดลอกลิงก์เส้นทางแล้ว' : 'คัดลอกลิงก์ปลายทางแล้ว');
+  } catch (e) {
+    alert('คัดลอกอัตโนมัติไม่สำเร็จ กรุณาคัดลอกด้วยตนเอง');
+  }
+}
+
+function loadRoutePreset(type) {
+  if (routeSegments.length === 0) routeSegments = baseRouteSegments();
+  routeSegments.forEach(function(seg) { seg.selected = false; });
+  if (type === 'import') {
+    const labels = ['ลานจอด YK LCB - ท่าเรือ LCB', 'ลานรับตู้เปล่า - ลานจอด YK LCB'];
+    routeSegments.forEach(function(seg) { if (labels.indexOf(seg.label) >= 0) seg.selected = true; });
+  } else {
+    const labels = ['ลานจอด YK LCB - ลานรับตู้เปล่า', 'ท่าเรือ LCB - ลานจอด YK LCB'];
+    routeSegments.forEach(function(seg) { if (labels.indexOf(seg.label) >= 0) seg.selected = true; });
+  }
+  renderRouteList();
+  renderCostResult();
+}
+
+function resetRouteSegments() {
+  routeSegments = baseRouteSegments();
+  renderRouteList();
+  renderCostResult();
+}
+
+function syncFuelPriceFromMain() {
+  const mainFuel = getVal('fuelPrice', 0);
+  if (mainFuel > 0) setVal('costFuelPrice', mainFuel.toFixed(2));
+  renderCostResult();
+}
+
+function calcCostModel() {
+  const distance = recalcDistance();
+  const fuelEff = getVal('fuelEfficiency', 0);
+  const costFuelPrice = getVal('costFuelPrice', 0);
+  const workingDays = getVal('workingDays', 0);
+  const monthlySalary = getVal('monthlySalary', 0);
+  const monthlyCare = getVal('monthlyCare', 0);
+  const annualVehicleInsurance = getVal('annualVehicleInsurance', 0);
+  const annualCargoInsurance = getVal('annualCargoInsurance', 0);
+  const insuranceWorkDaysPerMonth = Math.max(1, getVal('insuranceWorkDaysPerMonth', 24));
+  const assetValue = getVal('assetValue', 0);
+  const depreciationYears = Math.max(1, getVal('depreciationYears', 1));
+  const backOfficePercent = getVal('backOfficePercent', 0);
+  const tripAllowance = getVal('tripAllowance', 0);
+  const tollCost = getVal('tollCost', 0);
+  const maintenanceMode = document.getElementById('maintenanceMode').value || 'per_km';
+  const maintenanceRate = getVal('maintenanceRate', 0);
+  const includeShoreCost = !!document.getElementById('includeShoreCost').checked;
+  const shoreCost = includeShoreCost ? getVal('shoreCost', 0) : 0;
+  const customerPrice = getVal('customerPrice', 0);
+  const financeAnnualRate = getVal('financeAnnualRate', 0);
+  const customerCreditDays = getVal('customerCreditDays', 0);
+  const cashBurdenPercent = Math.min(100, Math.max(0, getVal('cashBurdenPercent', 100)));
+
+  const liters = fuelEff > 0 ? distance / fuelEff : 0;
+  const fuelCost = liters * costFuelPrice;
+  const driverDailyCost = ((monthlySalary + monthlyCare) / 30) * workingDays;
+  // ประกันคิดตามวันทำงานจริง ไม่เฉลี่ย 365 วัน
+  const annualWorkDays = insuranceWorkDaysPerMonth * 12;
+  const vehicleInsuranceCost = (annualVehicleInsurance / annualWorkDays) * workingDays;
+  const cargoInsuranceCost = (annualCargoInsurance / annualWorkDays) * workingDays;
+  const depreciationCost = ((assetValue / depreciationYears) / 365) * workingDays;
+  const maintenanceCost = maintenanceMode === 'pct_fuel'
+    ? fuelCost * (maintenanceRate / 100)
+    : distance * maintenanceRate;
+  const fixedDailyCost = driverDailyCost + vehicleInsuranceCost + cargoInsuranceCost + depreciationCost;
+  const tripCost = tripAllowance + tollCost + shoreCost;
+  const beforeBackOffice = fuelCost + fixedDailyCost + tripCost + maintenanceCost;
+  const backOfficeCost = beforeBackOffice * (backOfficePercent / 100);
+  const totalCost = beforeBackOffice + backOfficeCost;
+  const financedBaseCost = totalCost * (cashBurdenPercent / 100);
+  const financeCost = financedBaseCost * (financeAnnualRate / 100) * (customerCreditDays / 365);
+  const totalCostWithFinance = totalCost + financeCost;
+  const suggested15 = totalCost * 1.15;
+  const suggested30 = totalCost * 1.30;
+  const suggested15AfterFinance = totalCostWithFinance * 1.15;
+  const suggested30AfterFinance = totalCostWithFinance * 1.30;
+  const profitAmount = customerPrice - totalCost;
+  const marginPct = customerPrice > 0 ? (profitAmount / customerPrice) * 100 : 0;
+  const profitAfterFinance = customerPrice - totalCostWithFinance;
+  const marginAfterFinancePct = customerPrice > 0 ? (profitAfterFinance / customerPrice) * 100 : 0;
+  const fuelPctOfSale = customerPrice > 0 ? (fuelCost / customerPrice) * 100 : 0;
+  const driverPctOfSale = customerPrice > 0 ? (driverDailyCost / customerPrice) * 100 : 0;
+  const maintenancePctOfSale = customerPrice > 0 ? (maintenanceCost / customerPrice) * 100 : 0;
+
+  return {
+    distance, liters, fuelCost, driverDailyCost, vehicleInsuranceCost, cargoInsuranceCost, depreciationCost,
+    fixedDailyCost, tripCost, maintenanceCost, beforeBackOffice, backOfficeCost, totalCost, financeCost, totalCostWithFinance,
+    suggested15, suggested30, suggested15AfterFinance, suggested30AfterFinance, customerPrice,
+    profitAmount, marginPct, profitAfterFinance, marginAfterFinancePct, fuelPctOfSale, driverPctOfSale, maintenancePctOfSale, includeShoreCost
+  };
+}
+
+function applySuggestedPrice(level) {
+  const c = calcCostModel();
+  if (level === 15) setVal('customerPrice', Math.round(c.suggested15AfterFinance));
+  else setVal('customerPrice', Math.round(c.suggested30AfterFinance));
+  renderCostResult();
+}
+
+function renderCostResult() {
+  const c = calcCostModel();
+  setVal('fuelLiters', c.liters.toFixed(2));
+  setVal('fuelCost', c.fuelCost.toFixed(2));
+  const hints = '15%: ' + fmt(c.suggested15AfterFinance) + ' บาท | 30%: ' + fmt(c.suggested30AfterFinance) + ' บาท';
+  const hintsEl = document.getElementById('priceHints');
+  if (hintsEl) hintsEl.value = hints;
+
+  const kpiWrap = document.getElementById('costKpiCards');
+  if (kpiWrap) {
+    kpiWrap.innerHTML =
+      '<div class="kpi"><div class="k-label">ต้นทุนรวม/เที่ยว</div><div class="k-value">' + fmt(c.totalCost) + '</div></div>' +
+      '<div class="kpi"><div class="k-label">ต้นทุนการเงิน/เที่ยว</div><div class="k-value">' + fmt(c.financeCost) + '</div></div>' +
+      '<div class="kpi"><div class="k-label">ราคาขายขั้นต่ำ 15%</div><div class="k-value">' + fmt(c.suggested15) + '</div></div>' +
+      '<div class="kpi"><div class="k-label">ราคาขายสวย 30%</div><div class="k-value">' + fmt(c.suggested30) + '</div></div>' +
+      '<div class="kpi"><div class="k-label">% น้ำมันต่อราคาขาย</div><div class="k-value">' + c.fuelPctOfSale.toFixed(2) + '%</div></div>' +
+      '<div class="kpi"><div class="k-label">% ซ่อมบำรุงต่อราคาขาย</div><div class="k-value">' + c.maintenancePctOfSale.toFixed(2) + '%</div></div>' +
+      '<div class="kpi"><div class="k-label">% คนขับต่อราคาขาย</div><div class="k-value">' + c.driverPctOfSale.toFixed(2) + '%</div></div>' +
+      '<div class="kpi"><div class="k-label">% Margin หลังต้นทุนการเงิน</div><div class="k-value">' + c.marginAfterFinancePct.toFixed(2) + '%</div></div>';
+  }
+
+  const bd = document.getElementById('costBreakdownWrap');
+  if (bd) {
+    bd.innerHTML = '<table><thead><tr><th>รายการ</th><th>จำนวนเงิน (บาท)</th><th>% ของต้นทุนรวม</th></tr></thead><tbody>' +
+      '<tr><td>ค่าน้ำมัน</td><td>' + fmt(c.fuelCost) + '</td><td>' + (c.totalCost > 0 ? ((c.fuelCost / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
+      '<tr><td>ค่าแรง+ดูแลรถ (ตามวันทำงาน)</td><td>' + fmt(c.driverDailyCost) + '</td><td>' + (c.totalCost > 0 ? ((c.driverDailyCost / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
+      '<tr><td>ประกันรถ + ประกันสินค้า + สึกหรอ</td><td>' + fmt(c.vehicleInsuranceCost + c.cargoInsuranceCost + c.depreciationCost) + '</td><td>' + (c.totalCost > 0 ? (((c.vehicleInsuranceCost + c.cargoInsuranceCost + c.depreciationCost) / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
+      '<tr><td>ซ่อมบำรุง + ยาง + อะไหล่</td><td>' + fmt(c.maintenanceCost) + '</td><td>' + (c.totalCost > 0 ? ((c.maintenanceCost / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
+      '<tr><td>ค่าเที่ยว + ทางด่วน + ชอร์</td><td>' + fmt(c.tripCost) + '</td><td>' + (c.totalCost > 0 ? ((c.tripCost / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
+      '<tr><td>Back Office/อื่นๆ</td><td>' + fmt(c.backOfficeCost) + '</td><td>' + (c.totalCost > 0 ? ((c.backOfficeCost / c.totalCost) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
+      '<tr><td>ต้นทุนการเงิน (เครดิตลูกค้า)</td><td>' + fmt(c.financeCost) + '</td><td>' + (c.totalCostWithFinance > 0 ? ((c.financeCost / c.totalCostWithFinance) * 100).toFixed(2) : '0.00') + '%</td></tr>' +
+      '<tr><td><strong>ต้นทุนรวม</strong></td><td><strong>' + fmt(c.totalCost) + '</strong></td><td>100.00%</td></tr>' +
+      '<tr><td><strong>ต้นทุนรวมหลังการเงิน</strong></td><td><strong>' + fmt(c.totalCostWithFinance) + '</strong></td><td>100.00%</td></tr>' +
+      '<tr><td>กำไรก่อนการเงิน</td><td>' + fmt(c.profitAmount) + '</td><td>' + c.marginPct.toFixed(2) + '%</td></tr>' +
+      '<tr><td><strong>กำไรหลังการเงิน</strong></td><td><strong>' + fmt(c.profitAfterFinance) + '</strong></td><td><strong>' + c.marginAfterFinancePct.toFixed(2) + '%</strong></td></tr>' +
+      '</tbody></table>';
+  }
+
+  const warnings = [];
+  if (getVal('fuelEfficiency', 0) <= 0) warnings.push({ cls: 'bad', text: 'เรทน้ำมันต้องมากกว่า 0 กม./ลิตร' });
+  if (c.customerPrice > 0 && c.marginAfterFinancePct < 15) warnings.push({ cls: 'bad', text: 'กำไรหลังต้นทุนการเงินต่ำกว่าเกณฑ์ขั้นต่ำ 15%' });
+  if (c.customerPrice > 0 && c.fuelPctOfSale > 60) warnings.push({ cls: 'bad', text: '%น้ำมันสูงเกิน 60% ของราคาขาย' });
+  else if (c.customerPrice > 0 && c.fuelPctOfSale > 50) warnings.push({ cls: 'warn', text: '%น้ำมันเกิน 50% ของราคาขาย ควรเฝ้าระวัง' });
+  if (c.customerPrice > 0 && c.maintenancePctOfSale > 12) warnings.push({ cls: 'warn', text: '%ซ่อมบำรุงสูงเกิน 12% ของราคาขาย ควรทบทวนเรท/อายุรถ/เส้นทาง' });
+  if (c.customerPrice > 0 && c.driverPctOfSale > 17) warnings.push({ cls: 'warn', text: '%คนขับเกินเป้าสวย 17% (อาจยังรับได้ตามหน้างาน)' });
+  if (c.customerPrice > 0 && c.financeCost > 0 && (c.financeCost / c.customerPrice) * 100 > 3) warnings.push({ cls: 'warn', text: 'ต้นทุนการเงินเกิน 3% ของราคาขาย ควรเจรจาเครดิต/เงื่อนไขชำระ' });
+  if (c.distance <= 0) warnings.push({ cls: 'warn', text: 'ยังไม่ได้เลือกเส้นทาง ระยะทางรวมเป็น 0 กม.' });
+
+  const warnBox = document.getElementById('costWarningBox');
+  if (warnBox) {
+    warnBox.innerHTML = warnings.map(function(w) {
+      return '<div class="cost-warning ' + w.cls + '">' + w.text + '</div>';
+    }).join('');
+  }
+}
+
+function getScenarioInputIds() {
+  return [
+    'fuelEfficiency', 'costFuelPrice', 'workingDays', 'backOfficePercent', 'monthlySalary', 'monthlyCare',
+    'annualVehicleInsurance', 'annualCargoInsurance', 'insuranceWorkDaysPerMonth', 'assetValue', 'depreciationYears',
+    'tripAllowance', 'tollCost', 'maintenanceMode', 'maintenanceRate', 'includeShoreCost', 'shoreCost',
+    'customerPrice', 'financeAnnualRate', 'customerCreditDays', 'cashBurdenPercent', 'mapsOriginPreset',
+    'mapsOriginCustom', 'mapsDestinationLink'
+  ];
+}
+
+function getElementValueById(id) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  if (el.type === 'checkbox') return !!el.checked;
+  return el.value;
+}
+
+function setElementValueById(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.type === 'checkbox') el.checked = !!val;
+  else el.value = (val === undefined || val === null) ? '' : val;
+}
+
+function makeSnapshot() {
+  const fieldValues = {};
+  getScenarioInputIds().forEach(function(id) { fieldValues[id] = getElementValueById(id); });
+  const c = calcCostModel();
+  return {
+    fieldValues: fieldValues,
+    routeSegments: JSON.parse(JSON.stringify(routeSegments)),
+    summary: {
+      totalDistance: roundN(c.distance),
+      totalCost: roundN(c.totalCost),
+      totalCostWithFinance: roundN(c.totalCostWithFinance),
+      suggested15AfterFinance: roundN(c.suggested15AfterFinance),
+      marginAfterFinancePct: roundN(c.marginAfterFinancePct)
+    }
+  };
+}
+
+function applySnapshot(snapshot) {
+  if (!snapshot || !snapshot.fieldValues) return;
+  Object.keys(snapshot.fieldValues).forEach(function(id) {
+    setElementValueById(id, snapshot.fieldValues[id]);
+  });
+  if (Array.isArray(snapshot.routeSegments)) {
+    routeSegments = JSON.parse(JSON.stringify(snapshot.routeSegments));
+    renderRouteList();
+  }
+  renderCostResult();
+}
+
+function loadSavedJobsFromStorage() {
+  try {
+    const raw = localStorage.getItem(SAVED_JOBS_KEY);
+    if (!raw) { savedJobs = []; return; }
+    const data = JSON.parse(raw);
+    savedJobs = Array.isArray(data) ? data : [];
+  } catch (e) {
+    savedJobs = [];
+  }
+}
+
+function persistSavedJobsToStorage() {
+  localStorage.setItem(SAVED_JOBS_KEY, JSON.stringify(savedJobs));
+}
+
+function fmtSavedDate(iso) {
+  try { return new Date(iso).toLocaleString('th-TH'); }
+  catch (e) { return iso || '-'; }
+}
+
+function renderSavedJobsList() {
+  const wrap = document.getElementById('savedJobsList');
+  if (!wrap) return;
+  if (!savedJobs.length) {
+    wrap.innerHTML = '<div class="saved-item">ยังไม่มีงานที่บันทึก</div>';
+    return;
+  }
+  wrap.innerHTML = savedJobs.map(function(job, idx) {
+    const s = job.snapshot && job.snapshot.summary ? job.snapshot.summary : {};
+    return '<div class="saved-item">' +
+      '<div><strong>' + (job.jobName || 'ไม่ระบุชื่อ') + '</strong></div>' +
+      '<div class="saved-meta">บันทึก: ' + fmtSavedDate(job.savedAt) + ' | แท็ก: ' + (job.tags || '-') + '</div>' +
+      '<div class="saved-meta">ระยะ: ' + (s.totalDistance || 0) + ' กม. | ต้นทุนหลังการเงิน: ' + fmt(s.totalCostWithFinance || 0) + ' | Margin: ' + (s.marginAfterFinancePct || 0).toFixed(2) + '%</div>' +
+      '<div class="saved-meta">หมายเหตุ: ' + (job.note || '-') + '</div>' +
+      '<div class="saved-actions">' +
+      '<button class="btn btn-sm btn-secondary" onclick="loadSavedJobByIndex(' + idx + ')">โหลด</button>' +
+      '<button class="btn btn-sm btn-secondary" onclick="duplicateSavedJobByIndex(' + idx + ')">ทำสำเนา</button>' +
+      '<button class="btn btn-sm btn-danger" onclick="deleteSavedJobByIndex(' + idx + ')">ลบ</button>' +
+      '</div></div>';
+  }).join('');
+}
+
+function saveCurrentScenario() {
+  const jobName = (document.getElementById('saveJobName').value || '').trim();
+  if (!jobName) { alert('กรุณาใส่ชื่องาน/ลูกค้าก่อนบันทึก'); return; }
+  const tags = (document.getElementById('saveJobTags').value || '').trim();
+  const note = (document.getElementById('saveJobNote').value || '').trim();
+  const record = {
+    id: 'job_' + Date.now(),
+    jobName: jobName,
+    tags: tags,
+    note: note,
+    savedAt: new Date().toISOString(),
+    snapshot: makeSnapshot()
+  };
+  savedJobs.unshift(record);
+  persistSavedJobsToStorage();
+  renderSavedJobsList();
+  alert('บันทึกงานแล้ว');
+}
+
+function loadSavedJobByIndex(idx) {
+  const job = savedJobs[idx];
+  if (!job || !job.snapshot) return;
+  applySnapshot(job.snapshot);
+  document.getElementById('saveJobName').value = job.jobName || '';
+  document.getElementById('saveJobTags').value = job.tags || '';
+  document.getElementById('saveJobNote').value = job.note || '';
+}
+
+function duplicateSavedJobByIndex(idx) {
+  const job = savedJobs[idx];
+  if (!job) return;
+  const copy = JSON.parse(JSON.stringify(job));
+  copy.id = 'job_' + Date.now();
+  copy.jobName = (job.jobName || 'งานเดิม') + ' (copy)';
+  copy.savedAt = new Date().toISOString();
+  savedJobs.unshift(copy);
+  persistSavedJobsToStorage();
+  renderSavedJobsList();
+}
+
+function deleteSavedJobByIndex(idx) {
+  if (!confirm('ต้องการลบงานนี้ใช่ไหม?')) return;
+  savedJobs.splice(idx, 1);
+  persistSavedJobsToStorage();
+  renderSavedJobsList();
+}
+
+function clearAllSavedJobs() {
+  if (!confirm('ต้องการลบประวัติทั้งหมดใช่ไหม?')) return;
+  savedJobs = [];
+  persistSavedJobsToStorage();
+  renderSavedJobsList();
+}
+
+function exportSavedJobsJson() {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    app: 'TransportRateCalculator',
+    records: savedJobs
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'yk-cost-data-' + todayStr() + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function triggerImportSavedJobs() {
+  const input = document.getElementById('savedJobsFileInput');
+  if (!input) return;
+  input.value = '';
+  input.click();
+}
+
+function importSavedJobsFromText(jsonText) {
+  let data;
+  try {
+    data = JSON.parse(jsonText);
+  } catch (e) {
+    alert('ไฟล์ JSON ไม่ถูกต้อง');
+    return;
+  }
+  const incoming = Array.isArray(data) ? data : (Array.isArray(data.records) ? data.records : null);
+  if (!incoming) {
+    alert('ไม่พบ records ในไฟล์');
+    return;
+  }
+  savedJobs = incoming;
+  persistSavedJobsToStorage();
+  renderSavedJobsList();
+  alert('นำเข้าข้อมูลแล้ว');
+}
+
+function saveDriveSettings() {
+  const payload = {
+    url: (document.getElementById('driveScriptUrl').value || '').trim(),
+    secret: (document.getElementById('driveSyncSecret').value || '').trim()
+  };
+  localStorage.setItem(DRIVE_SETTINGS_KEY, JSON.stringify(payload));
+  alert('บันทึก URL/Secret ในเครื่องนี้แล้ว');
+}
+
+function loadDriveSettings() {
+  try {
+    const raw = localStorage.getItem(DRIVE_SETTINGS_KEY);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.url) document.getElementById('driveScriptUrl').value = data.url;
+    if (data.secret) document.getElementById('driveSyncSecret').value = data.secret;
+  } catch (e) {}
+}
+
+function getDriveSyncPayload() {
+  return {
+    records: savedJobs,
+    updatedAt: new Date().toISOString(),
+    source: 'TransportRateCalculator'
+  };
+}
+
+async function syncToDrive() {
+  const url = (document.getElementById('driveScriptUrl').value || '').trim();
+  const secret = (document.getElementById('driveSyncSecret').value || '').trim();
+  if (!url) { alert('กรุณาใส่ Apps Script URL ก่อน'); return; }
+  const payload = getDriveSyncPayload();
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'save', secret: secret, payload: payload })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    alert('Sync to Drive สำเร็จ');
+  } catch (e) {
+    alert('Sync ไม่สำเร็จ: ' + e.message);
+  }
+}
+
+async function loadFromDrive() {
+  const url = (document.getElementById('driveScriptUrl').value || '').trim();
+  const secret = (document.getElementById('driveSyncSecret').value || '').trim();
+  if (!url) { alert('กรุณาใส่ Apps Script URL ก่อน'); return; }
+  try {
+    const q = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'action=load&secret=' + encodeURIComponent(secret);
+    const res = await fetch(q, { method: 'GET' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const incoming = Array.isArray(data.records) ? data.records : (Array.isArray(data) ? data : null);
+    if (!incoming) throw new Error('รูปแบบข้อมูลจาก Drive ไม่ถูกต้อง');
+    savedJobs = incoming;
+    persistSavedJobsToStorage();
+    renderSavedJobsList();
+    alert('Load from Drive สำเร็จ');
+  } catch (e) {
+    alert('Load ไม่สำเร็จ: ' + e.message);
+  }
+}
+
+function setupCostInputs() {
+  const ids = [
+    'fuelEfficiency', 'costFuelPrice', 'workingDays', 'backOfficePercent', 'monthlySalary', 'monthlyCare',
+    'annualVehicleInsurance', 'annualCargoInsurance', 'insuranceWorkDaysPerMonth', 'assetValue', 'depreciationYears', 'tripAllowance',
+    'tollCost', 'maintenanceMode', 'maintenanceRate', 'shoreCost', 'customerPrice', 'financeAnnualRate', 'customerCreditDays', 'cashBurdenPercent', 'includeShoreCost'
+  ];
+  ids.forEach(function(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const eventName = el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(eventName, renderCostResult);
+  });
+  const mainFuel = document.getElementById('fuelPrice');
+  if (mainFuel) {
+    mainFuel.addEventListener('input', function() {
+      const cf = document.getElementById('costFuelPrice');
+      if (cf && (!cf.value || parseFloat(cf.value) <= 0)) {
+        cf.value = mainFuel.value;
+      }
+      renderCostResult();
+    });
+  }
+}
+
+function initCostModule() {
+  routeSegments = baseRouteSegments();
+  renderRouteList();
+  syncFuelPriceFromMain();
+  setupCostInputs();
+  loadSavedJobsFromStorage();
+  renderSavedJobsList();
+  loadDriveSettings();
+  const fileInput = document.getElementById('savedJobsFileInput');
+  if (fileInput) {
+    fileInput.addEventListener('change', function(e) {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        importSavedJobsFromText(String(evt.target.result || ''));
+      };
+      reader.readAsText(file);
+    });
+  }
+  renderCostResult();
+}
+
 document.getElementById('adjustPercent').addEventListener('input', function() {
   updateExampleCalc();
   if (isResultVisible()) generateResult();
@@ -931,6 +1753,7 @@ function setupWizardEnterNavigation() {
 }
 
 setupWizardEnterNavigation();
+initCostModule();
 
 </script>
 </body>
