@@ -1158,13 +1158,23 @@ function extractDestinationFromGoogleMapsLink(link) {
   try {
     const rawLatLng = extractLatLngFromText(link);
     if (rawLatLng) return rawLatLng;
+    const dataLatLng = extractLatLngFromMapsData(link);
+    if (dataLatLng) return dataLatLng;
     const u = new URL(link);
     const q = u.searchParams.get('q');
     if (q) return q;
     const dest = u.searchParams.get('destination');
     if (dest) return dest;
-    const dirMatch = u.pathname.match(/\/dir\/([^/]+)\/([^/]+)/i);
-    if (dirMatch && dirMatch[2]) return decodeURIComponent(dirMatch[2]);
+    const query = u.searchParams.get('query');
+    if (query) return query;
+    const searchQuery = u.searchParams.get('search_query');
+    if (searchQuery) return searchQuery;
+
+    const placePathMatch = decodeURIComponent(u.pathname).match(/\/place\/([^/]+)/i);
+    if (placePathMatch && placePathMatch[1]) return placePathMatch[1].replace(/\+/g, ' ');
+
+    const dirMatch = decodeURIComponent(u.pathname).match(/\/dir\/(?:[^/]*\/)?([^/?#]+)/i);
+    if (dirMatch && dirMatch[1]) return dirMatch[1].replace(/\+/g, ' ');
     const atMatch = u.pathname.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
     if (atMatch) return atMatch[1] + ',' + atMatch[2];
     return '';
@@ -1178,6 +1188,16 @@ function extractLatLngFromText(text) {
   const m = String(text).match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
   if (!m) return '';
   return m[1] + ',' + m[2];
+}
+
+function extractLatLngFromMapsData(text) {
+  if (!text) return '';
+  const s = String(text);
+  const m1 = s.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (m1) return m1[1] + ',' + m1[2];
+  const m2 = s.match(/!4d(-?\d+(?:\.\d+)?)!3d(-?\d+(?:\.\d+)?)/);
+  if (m2) return m2[2] + ',' + m2[1];
+  return '';
 }
 
 function buildGoogleMapsRouteUrl() {
