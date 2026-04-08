@@ -351,7 +351,7 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
       </div>
       <div class="route-list" id="routeList"></div>
       <div class="input-row" style="margin-top:10px">
-        <div class="input-group"><label class="field-label">เพิ่มเส้นทางใหม่</label><input type="text" id="newRouteName" placeholder="เช่น YK LCB - ลูกค้า A"></div>
+        <div class="input-group"><label class="field-label">เพิ่มเส้นทางใหม่ (ไม่ใส่ชื่อได้)</label><input type="text" id="newRouteName" placeholder="เช่น YK LCB - ลูกค้า A (เว้นว่างได้)"></div>
         <div class="input-group"><label class="field-label">ระยะทาง (กม.)</label><input type="text" id="newRouteDistance" placeholder="เช่น 86 หรือ +43*2 หรือ =43*2"></div>
       </div>
       <div class="input-group">
@@ -396,7 +396,7 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
         <button class="btn btn-sm btn-secondary" onclick="syncFuelPriceFromMain()">ใช้ราคาน้ำมันจากด้านบน</button>
       </div>
       <div class="input-row">
-        <div class="input-group"><label class="field-label">เรทน้ำมัน (กม./ลิตร)</label><input type="number" id="fuelEfficiency" min="0" step="0.01" value="2.6"></div>
+        <div class="input-group"><label class="field-label">เรทน้ำมัน (กม./ลิตร)</label><input type="number" id="fuelEfficiency" min="0" step="0.01" value="3"></div>
         <div class="input-group"><label class="field-label">ราคาน้ำมัน (บาท/ลิตร)</label><input type="number" id="costFuelPrice" min="0" step="0.01"></div>
       </div>
       <div class="input-row">
@@ -443,13 +443,13 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
             <option value="pct_fuel">% ของค่าน้ำมัน</option>
           </select>
         </div>
-        <div class="input-group"><label class="field-label">ค่าซ่อมบำรุง (บาท/กม. หรือ %)</label><input type="number" id="maintenanceRate" min="0" step="0.1" value="5.0"></div>
+        <div class="input-group"><label class="field-label">ค่าซ่อมบำรุง (บาท/กม. หรือ %)</label><input type="number" id="maintenanceRate" min="0" step="0.1" value="1.5"></div>
       </div>
       <div class="input-row">
         <div class="input-group">
           <label class="field-label">ค่าทำชอร์</label>
           <div class="input-suffix">
-            <input type="checkbox" id="includeShoreCost" checked style="width:auto">
+            <input type="checkbox" id="includeShoreCost" style="width:auto">
             <span>คิดค่าทำชอร์</span>
           </div>
         </div>
@@ -1143,12 +1143,14 @@ function addRouteSegment() {
   const nameEl = document.getElementById('newRouteName');
   const disEl = document.getElementById('newRouteDistance');
   const rtEl = document.getElementById('newRouteRoundTrip');
-  const label = (nameEl.value || '').trim();
+  let label = (nameEl.value || '').trim();
   const parsed = parseDistanceExpression(disEl.value);
   let distance = ensureNum(parsed, NaN);
   if (rtEl && rtEl.checked && Number.isFinite(distance)) distance = distance * 2;
-  if (!label) { alert('กรุณากรอกชื่อเส้นทาง'); return; }
   if (!Number.isFinite(distance) || distance <= 0) { alert('กรุณากรอกระยะทางที่ถูกต้อง'); return; }
+  if (!label) {
+    label = 'เส้นทางใหม่ ' + roundN(distance) + ' กม.';
+  }
   routeSegments.push({ id: 'r' + (routeIdSeq++), label: label, distance: roundN(distance), selected: true, custom: true });
   nameEl.value = '';
   disEl.value = '';
