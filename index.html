@@ -276,7 +276,7 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
   <!-- Step 4 -->
   <div class="step-card" id="step4">
     <div class="step-title">วิธีการปรับราคา</div>
-    <div class="step-desc">เลือกวิธีคิดเปอร์เซ็นต์ปรับค่าขนส่งเมื่อน้ำมันเปลี่ยนช่วง</div>
+    <div class="step-desc">เลือกชนิดการปรับราคา เมื่อน้ำมันเปลี่ยนช่วง</div>
     <div class="radio-group" id="calcMethodGroup" role="radiogroup" aria-label="วิธีการปรับราคา ใช้ลูกศรซ้ายขวาเลือก" tabindex="0">
       <label class="radio-card selected" onclick="selectMethod('compound')">
         <input type="radio" name="calcMethod" value="compound" checked>
@@ -290,11 +290,24 @@ tr.highlight-current.highlight-base{background:#d1fae5 !important}
       </label>
     </div>
 
+    <div class="radio-group" id="adjustModeGroup" role="radiogroup" aria-label="ชนิดการปรับราคา" tabindex="0">
+      <label class="radio-card adjust-mode-card selected" onclick="selectAdjustMode('percent')">
+        <input type="radio" name="adjustMode" value="percent" checked>
+        <div class="rc-title">ปรับแบบเปอร์เซ็นต์ (%)</div>
+        <div class="rc-desc">ใช้ได้ทั้งแบบ Compound และจาก Base Rate</div>
+      </label>
+      <label class="radio-card adjust-mode-card" onclick="selectAdjustMode('baht_per_step')">
+        <input type="radio" name="adjustMode" value="baht_per_step">
+        <div class="rc-title">ปรับแบบจำนวนเงิน (บาท/ช่วง)</div>
+        <div class="rc-desc">แต่ละช่วงห่างจากฐาน 1 ขั้น จะบวก/ลบเป็นเงินบาทคงที่</div>
+      </label>
+    </div>
+
     <div class="input-group" style="margin-top:14px">
-      <label class="field-label">% ปรับต่อ <span id="pctUnitText">1 บาท</span></label>
+      <label class="field-label" id="adjustValueLabel">% ปรับต่อ <span id="pctUnitText">1 บาท</span></label>
       <div class="input-suffix">
         <input type="number" id="adjustPercent" step="0.1" min="0" value="2" placeholder="เช่น 2">
-        <span>%</span>
+        <span id="adjustValueSuffix">%</span>
       </div>
     </div>
 
@@ -543,6 +556,7 @@ const totalSteps = 4;
 let ranges = [];
 let calcMethod = 'compound';
 let rangeType = 'uniform';
+let adjustMode = 'percent'; // percent | baht_per_step
 let pctMode = 'per_baht'; // per_baht: คิด % ต่อราคาน้ำมันเพิ่ม 1 บาท, per_step: คิด % ต่อจำนวนช่วง
 let resultData = [];
 let baseSelectHasInitialized = false; // ตั้งค่าเริ่มต้น Base Rate ให้ตรงกับ “ราคาน้ำมันปัจจุบัน” ครั้งแรกที่เข้าขั้น
@@ -579,7 +593,7 @@ function validateStep(from, to) {
   }
   if (from === 4) {
     const v = parseFloat(document.getElementById('adjustPercent').value);
-    if (isNaN(v) || v <= 0) { alert('กรุณากรอกเปอร์เซ็นต์ที่ถูกต้อง'); return false; }
+    if (isNaN(v) || v <= 0) { alert('กรุณากรอกค่าการปรับที่ถูกต้อง'); return false; }
   }
   return true;
 }
@@ -735,8 +749,43 @@ function selectPctMode(m) {
   if (isResultVisible()) generateResult();
 }
 
+function selectAdjustMode(m) {
+  adjustMode = m;
+  document.querySelectorAll('#step4 .adjust-mode-card').forEach(c => c.classList.remove('selected'));
+  const cards = document.querySelectorAll('#step4 .adjust-mode-card');
+  const pctGroup = document.getElementById('pctModeGroup');
+  const label = document.getElementById('adjustValueLabel');
+  const suffix = document.getElementById('adjustValueSuffix');
+  const input = document.getElementById('adjustPercent');
+
+  if (m === 'percent') {
+    cards[0].classList.add('selected');
+    cards[0].querySelector('input').checked = true;
+    cards[1].querySelector('input').checked = false;
+    if (pctGroup) pctGroup.style.display = '';
+    if (label) label.innerHTML = '% ปรับต่อ <span id="pctUnitText">' + getPctUnitText() + '</span>';
+    if (suffix) suffix.textContent = '%';
+    if (input) input.placeholder = 'เช่น 2';
+  } else {
+    cards[1].classList.add('selected');
+    cards[1].querySelector('input').checked = true;
+    cards[0].querySelector('input').checked = false;
+    if (pctGroup) pctGroup.style.display = 'none';
+    if (label) label.textContent = 'ปรับราคา ต่อ 1 ช่วง';
+    if (suffix) suffix.textContent = 'บาท';
+    if (input) input.placeholder = 'เช่น 80';
+  }
+
+  updateExampleCalc();
+  if (isResultVisible()) generateResult();
+}
+
 function getPctUnitText() {
   return pctMode === 'per_baht' ? '1 บาท' : 'ขั้น';
+}
+
+function getStepDeltaFromBase(i, baseIdx) {
+  return i - baseIdx;
 }
 
 function getDeltaFromBase(i, baseIdx) {
@@ -747,7 +796,7 @@ function getDeltaFromBase(i, baseIdx) {
 
 function fmtDelta(val) {
   const n = Math.round(val * 100) / 100;
-  if (pctMode === 'per_baht') return n.toFixed(2);
+  if (adjustMode !== 'baht_per_step' && pctMode === 'per_baht') return n.toFixed(2);
   return String(n);
 }
 
@@ -755,12 +804,12 @@ function updateExampleCalc() {
   const box = document.getElementById('exampleCalc');
   if (!box) return;
 
-  const pct = parseFloat(document.getElementById('adjustPercent').value);
+  const adjustVal = parseFloat(document.getElementById('adjustPercent').value);
   const baseRate = parseFloat(document.getElementById('baseRate').value);
   const baseIdx = parseInt(document.getElementById('baseRangeSelect').value);
   const fuelPrice = parseFloat(document.getElementById('fuelPrice').value);
 
-  if (isNaN(pct) || pct <= 0) {
+  if (isNaN(adjustVal) || adjustVal <= 0) {
     box.innerHTML = '';
     return;
   }
@@ -771,8 +820,12 @@ function updateExampleCalc() {
     return;
   }
 
-  const deltaHeader = pctMode === 'per_baht' ? 'ห่างจากฐาน' : 'ขั้นห่างจากฐาน';
-  const methodLabel = calcMethod === 'base' ? 'จาก Base Rate' : 'ขั้นบันได (Compound)';
+  const deltaHeader = adjustMode === 'baht_per_step'
+    ? 'ขั้นห่างจากฐาน'
+    : (pctMode === 'per_baht' ? 'ห่างจากฐาน' : 'ขั้นห่างจากฐาน');
+  const methodLabel = adjustMode === 'baht_per_step'
+    ? 'บวก/ลบ แบบจำนวนบาทต่อช่วง'
+    : (calcMethod === 'base' ? 'จาก Base Rate' : 'ขั้นบันได (Compound)');
 
   let html =
     '<div style="font-size:.78rem;color:var(--text-light);margin-bottom:10px">ตัวอย่างอัตราค่าขนส่ง (ทุกช่วง) - ' + methodLabel + '</div>' +
@@ -786,22 +839,27 @@ function updateExampleCalc() {
 
   let prevRate = null;
   for (let i = 0; i < ranges.length; i++) {
-    const diff = getDeltaFromBase(i, baseIdx);
+    const diff = adjustMode === 'baht_per_step' ? getStepDeltaFromBase(i, baseIdx) : getDeltaFromBase(i, baseIdx);
     let rate, pctFromBase;
 
-    if (calcMethod === 'base') {
-      pctFromBase = diff * pct;
-      rate = baseRate * (1 + pctFromBase / 100);
+    if (adjustMode === 'baht_per_step') {
+      rate = baseRate + (diff * adjustVal);
+      pctFromBase = baseRate > 0 ? ((rate / baseRate) - 1) * 100 : 0;
     } else {
-      if (diff === 0) {
-        rate = baseRate;
-        pctFromBase = 0;
-      } else if (diff > 0) {
-        rate = baseRate * Math.pow(1 + pct / 100, diff);
-        pctFromBase = ((rate / baseRate) - 1) * 100;
+      if (calcMethod === 'base') {
+        pctFromBase = diff * adjustVal;
+        rate = baseRate * (1 + pctFromBase / 100);
       } else {
-        rate = baseRate * Math.pow(1 - pct / 100, Math.abs(diff));
-        pctFromBase = ((rate / baseRate) - 1) * 100;
+        if (diff === 0) {
+          rate = baseRate;
+          pctFromBase = 0;
+        } else if (diff > 0) {
+          rate = baseRate * Math.pow(1 + adjustVal / 100, diff);
+          pctFromBase = ((rate / baseRate) - 1) * 100;
+        } else {
+          rate = baseRate * Math.pow(1 - adjustVal / 100, Math.abs(diff));
+          pctFromBase = ((rate / baseRate) - 1) * 100;
+        }
       }
     }
 
@@ -869,31 +927,36 @@ function populateMaxRangeSelect() {
 
 function generateResult() {
   const fuelPrice = parseFloat(document.getElementById('fuelPrice').value);
-  const pct = parseFloat(document.getElementById('adjustPercent').value);
+  const adjustVal = parseFloat(document.getElementById('adjustPercent').value);
   const baseRate = parseFloat(document.getElementById('baseRate').value);
   const baseIdx = parseInt(document.getElementById('baseRangeSelect').value);
   const maxIdx = ranges.length - 1; // แสดงครบทุกช่วง (ตัด Step 6 ออกแล้ว)
 
-  if (isNaN(pct) || pct <= 0) { alert('กรุณากรอกเปอร์เซ็นต์ที่ถูกต้อง'); return; }
+  if (isNaN(adjustVal) || adjustVal <= 0) { alert('กรุณากรอกค่าการปรับที่ถูกต้อง'); return; }
   if (isNaN(baseRate) || baseRate <= 0) { alert('กรุณากรอกค่าขนส่งฐานที่ถูกต้อง'); return; }
 
   resultData = [];
   for (let i = 0; i <= maxIdx; i++) {
-    const diff = getDeltaFromBase(i, baseIdx);
+    const diff = adjustMode === 'baht_per_step' ? getStepDeltaFromBase(i, baseIdx) : getDeltaFromBase(i, baseIdx);
     let rate, pctFromBase;
-    if (calcMethod === 'base') {
-      pctFromBase = diff * pct;
-      rate = baseRate * (1 + pctFromBase / 100);
+    if (adjustMode === 'baht_per_step') {
+      rate = baseRate + (diff * adjustVal);
+      pctFromBase = baseRate > 0 ? ((rate / baseRate) - 1) * 100 : 0;
     } else {
-      if (diff === 0) {
-        rate = baseRate;
-        pctFromBase = 0;
-      } else if (diff > 0) {
-        rate = baseRate * Math.pow(1 + pct / 100, diff);
-        pctFromBase = ((rate / baseRate) - 1) * 100;
+      if (calcMethod === 'base') {
+        pctFromBase = diff * adjustVal;
+        rate = baseRate * (1 + pctFromBase / 100);
       } else {
-        rate = baseRate * Math.pow(1 - pct / 100, Math.abs(diff));
-        pctFromBase = ((rate / baseRate) - 1) * 100;
+        if (diff === 0) {
+          rate = baseRate;
+          pctFromBase = 0;
+        } else if (diff > 0) {
+          rate = baseRate * Math.pow(1 + adjustVal / 100, diff);
+          pctFromBase = ((rate / baseRate) - 1) * 100;
+        } else {
+          rate = baseRate * Math.pow(1 - adjustVal / 100, Math.abs(diff));
+          pctFromBase = ((rate / baseRate) - 1) * 100;
+        }
       }
     }
     const isBase = i === baseIdx;
@@ -909,25 +972,31 @@ function generateResult() {
     });
   }
 
-  renderResult(fuelPrice, pct, baseRate, baseIdx);
+  renderResult(fuelPrice, adjustVal, baseRate, baseIdx);
 }
 
-function renderResult(fuelPrice, pct, baseRate, baseIdx) {
+function renderResult(fuelPrice, adjustVal, baseRate, baseIdx) {
   document.getElementById('wizardContainer').style.display = 'none';
   document.getElementById('progressBar').style.display = 'none';
   const sec = document.getElementById('resultSection');
   sec.classList.add('visible');
 
-  const methodLabel = calcMethod === 'base' ? 'จาก Base Rate' : 'ขั้นบันได (Compound)';
-  const pctLabel = pctMode === 'per_baht' ? '% ปรับต่อ 1 บาท' : '% ปรับต่อขั้น';
-  const deltaHeader = pctMode === 'per_baht' ? 'ห่างจากฐาน (บาท)' : 'ขั้นห่างจากฐาน';
+  const methodLabel = adjustMode === 'baht_per_step'
+    ? 'บวก/ลบ แบบจำนวนบาทต่อช่วง'
+    : (calcMethod === 'base' ? 'จาก Base Rate' : 'ขั้นบันได (Compound)');
+  const adjustLabel = adjustMode === 'baht_per_step'
+    ? 'ปรับราคา ต่อ 1 ช่วง'
+    : (pctMode === 'per_baht' ? '% ปรับต่อ 1 บาท' : '% ปรับต่อขั้น');
+  const deltaHeader = (adjustMode === 'baht_per_step' || pctMode === 'per_step')
+    ? 'ขั้นห่างจากฐาน'
+    : 'ห่างจากฐาน (บาท)';
 
   document.getElementById('summaryCards').innerHTML =
     '<div class="summary-card"><div class="sc-label">น้ำมันปัจจุบัน</div><div class="sc-value">' + fmt(fuelPrice) + ' บ./ล.</div></div>' +
     '<div class="summary-card"><div class="sc-label">ค่าขนส่งฐาน</div><div class="sc-value">' + fmt(baseRate) + ' บาท</div></div>' +
     '<div class="summary-card"><div class="sc-label">ช่วงน้ำมันฐาน</div><div class="sc-value">' + fmtRange(ranges[baseIdx].from, ranges[baseIdx].to) + '</div></div>' +
     '<div class="summary-card"><div class="sc-label">วิธีปรับ</div><div class="sc-value">' + methodLabel + '</div></div>' +
-    '<div class="summary-card"><div class="sc-label">' + pctLabel + '</div><div class="sc-value">' + pct + '%</div></div>';
+    '<div class="summary-card"><div class="sc-label">' + adjustLabel + '</div><div class="sc-value">' + adjustVal + (adjustMode === 'baht_per_step' ? ' บาท' : '%') + '</div></div>';
 
   let html = '<table id="resultTable"><thead><tr>' +
     '<th>ลำดับ</th><th>ช่วงราคาน้ำมัน (บาท)</th><th>ค่าขนส่ง (บาท)</th><th>' + deltaHeader + '</th><th>% ปรับจากฐาน</th><th>ผลต่างจากฐาน (บาท)</th>' +
@@ -972,18 +1041,24 @@ function backToWizard() {
 
 function exportExcel() {
   const fuelPrice = parseFloat(document.getElementById('fuelPrice').value);
-  const pct = parseFloat(document.getElementById('adjustPercent').value);
+  const adjustVal = parseFloat(document.getElementById('adjustPercent').value);
   const baseRate = parseFloat(document.getElementById('baseRate').value);
-  const methodLabel = calcMethod === 'base' ? 'จาก Base Rate' : 'ขั้นบันได (Compound)';
-  const pctLabel = pctMode === 'per_baht' ? '% ปรับต่อ 1 บาท' : '% ปรับต่อขั้น';
-  const deltaCol = pctMode === 'per_baht' ? 'ห่างจากฐาน (บาท)' : 'ขั้นห่างจากฐาน';
+  const methodLabel = adjustMode === 'baht_per_step'
+    ? 'บวก/ลบ แบบจำนวนบาทต่อช่วง'
+    : (calcMethod === 'base' ? 'จาก Base Rate' : 'ขั้นบันได (Compound)');
+  const adjustLabel = adjustMode === 'baht_per_step'
+    ? 'ปรับราคา ต่อ 1 ช่วง'
+    : (pctMode === 'per_baht' ? '% ปรับต่อ 1 บาท' : '% ปรับต่อขั้น');
+  const deltaCol = (adjustMode === 'baht_per_step' || pctMode === 'per_step')
+    ? 'ขั้นห่างจากฐาน'
+    : 'ห่างจากฐาน (บาท)';
 
   const header = [
     ['คำนวณค่าขนส่งตามราคาน้ำมัน'],
     ['น้ำมันปัจจุบัน', fuelPrice + ' บาท/ลิตร'],
     ['ค่าขนส่งฐาน', baseRate + ' บาท'],
     ['วิธีปรับ', methodLabel],
-    [pctLabel, pct + '%'],
+    [adjustLabel, adjustVal + (adjustMode === 'baht_per_step' ? ' บาท' : '%')],
     [],
     ['ลำดับ', 'ช่วงราคาน้ำมัน (บาท)', 'ค่าขนส่ง (บาท)', deltaCol, '% ปรับจากฐาน', 'ผลต่างจากฐาน (บาท)', 'หมายเหตุ']
   ];
