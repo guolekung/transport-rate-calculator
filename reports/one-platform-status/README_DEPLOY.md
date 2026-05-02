@@ -10,7 +10,7 @@
 python ProjectYK_System\docs-public\one-platform-status\build_public_stats.py
 ```
 
-แล้วคัดลอกทั้งโฟลเดอร์ `one-platform-status` ไปยัง clone ของ `transport-rate-calculator` อีกครั้ง (ให้ `public-stats.json` เป็นข้อมูลล่าสุด)
+แล้วคัดลอกทั้งโฟลเดอร์ `one-platform-status` (รวม `assets/screenshot-daily-desktop.png`) ไปยัง clone ของ `transport-rate-calculator` อีกครั้ง (ให้ `public-stats.json` เป็นข้อมูลล่าสุด)
 
 ## แนวทางที่ตรงกับ Pages เดิม
 
