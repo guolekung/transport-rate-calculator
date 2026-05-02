@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Y.K. Logistics — One Platform (สถานะพัฒนา)</title>
+  <meta name="description" content="สรุปภาพรวม One Platform + สถิติจริงจากฐานข้อมูลพัฒนา (ตัวเลขรวมเท่านั้น)" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            yk: { navy: '#0f172a', gold: '#c9a227', muted: '#64748b' }
+          },
+          fontFamily: { sans: ['Sarabun', 'system-ui', 'sans-serif'] }
+        }
+      }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen">
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-10">
+    <div class="max-w-4xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="text-xs uppercase tracking-widest text-yk-gold font-semibold">Internal roadmap</p>
+        <h1 class="text-xl md:text-2xl font-bold text-white">Y.K. Logistics — One Platform</h1>
+      </div>
+      <p class="text-sm text-slate-400">อัปเดตภาพรวม · พ.ค. 2026</p>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-4 py-10 space-y-12">
+
+    <section class="rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-900 to-slate-900/50 p-6 md:p-8">
+      <h2 class="text-lg font-semibold text-yk-gold mb-3">เป้าหมายระบบ</h2>
+      <p class="text-slate-300 leading-relaxed text-lg">
+        แพลตฟอร์มเดียวครอบคลุมงานสำนักงานและไซท์:
+        <span class="text-white font-medium">Dispatch → รายวัน → สดย่อย → บิลลูกค้า → เงินเดือน → ซ่อมบำรุง → บัญชี/การเงิน → Dashboard ผู้บริหาร</span>
+      </p>
+      <p class="mt-4 text-sm text-slate-500">
+        ด้านล่างมี <span class="text-slate-300">สถิติจริง</span> จาก SQLite บนเครื่องพัฒนา (นับจำนวนแถว / ช่วงวันที่) — ไม่ส่งออกชื่อคน ทะเบียน หรือยอดเงินรายบรรทัด เพื่อความปลอดภัยบนลิงก์สาธารณะ
+      </p>
+    </section>
+
+    <section id="stats-section" class="rounded-2xl border border-amber-900/40 bg-amber-950/20 p-6 md:p-8">
+      <h2 class="text-lg font-semibold text-amber-200 mb-2 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+        ข้อมูลจริงจากฐานข้อมูลระบบ (ตัวเลขรวม)
+      </h2>
+      <p class="text-xs text-amber-200/70 mb-4">อัปเดตอัตโนมัติเมื่อรัน <code class="text-amber-100/90 bg-black/30 px-1 rounded">build_public_stats.py</code> ก่อน deploy — ไฟล์ <code class="text-amber-100/90 bg-black/30 px-1 rounded">public-stats.json</code></p>
+      <div id="stats-root" class="text-slate-400 text-sm">กำลังโหลดสถิติ…</div>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        สิ่งที่เปิดออนไลน์แล้ว (GitHub Pages)
+      </h2>
+      <ul class="space-y-3">
+        <li>
+          <a class="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 hover:border-yk-gold/50 hover:bg-slate-900 transition"
+             href="https://yk-logistics.github.io/transport-rate-calculator/reports/oatside-apr2026/index.html"
+             target="_blank" rel="noopener noreferrer">
+            <span class="font-medium text-white">รายงาน Oatside / GPS (ตัวอย่างชุดรายงาน)</span>
+            <span class="block text-sm text-slate-400 mt-1">yk-logistics.github.io · transport-rate-calculator</span>
+          </a>
+        </li>
+        <li>
+          <a class="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 hover:border-yk-gold/50 hover:bg-slate-900 transition"
+             href="https://yk-logistics.github.io/transport-rate-calculator/"
+             target="_blank" rel="noopener noreferrer">
+            <span class="font-medium text-white">Transport Rate Calculator (เครื่องคิดเรท / น้ำมัน)</span>
+            <span class="block text-sm text-slate-400 mt-1">หน้าแรกของ repo Pages — deploy สคริปต์คัดลอกเป็น index.html ที่ root</span>
+          </a>
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold text-white mb-4">ธุรกิจที่ระบบออกแบบรองรับ</h2>
+      <div class="grid md:grid-cols-3 gap-4 text-sm">
+        <div class="rounded-xl border border-slate-800 p-4 bg-slate-900/40">
+          <p class="font-semibold text-yk-gold mb-2">AYU</p>
+          <p class="text-slate-400">รายเที่ยว + เหมาน้ำมัน</p>
+        </div>
+        <div class="rounded-xl border border-slate-800 p-4 bg-slate-900/40">
+          <p class="font-semibold text-yk-gold mb-2">BIGC</p>
+          <p class="text-slate-400">เงินเดือน + ค่าเที่ยว + เรทน้ำมัน rebate</p>
+        </div>
+        <div class="rounded-xl border border-slate-800 p-4 bg-slate-900/40">
+          <p class="font-semibold text-yk-gold mb-2">LCB</p>
+          <p class="text-slate-400">รายเที่ยว + เหมาน้ำมัน</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg font-semibold text-white mb-4">แอป One Platform (พัฒนาในโปรเจกต์ภายใน)</h2>
+      <p class="text-slate-400 text-sm mb-6">สแตก: FastAPI + SQLite (พัฒนา) / HTMX + Tailwind — รันบนเครื่องหรือเซิร์ฟเวอร์ภายหลัง ไม่ใช่หน้า static นี้</p>
+
+      <div class="space-y-6">
+        <div>
+          <h3 class="text-sm font-semibold text-emerald-400 uppercase tracking-wide mb-2">ทำแล้ว (MVP+)</h3>
+          <ul class="list-disc list-inside text-slate-300 space-y-1 text-sm md:text-base">
+            <li>Daily / Billing / Petty Cash / Payroll — ใช้งานได้ + ทดสอบเบื้องต้นผ่าน</li>
+            <li>Maintenance — PM/RM/ยาง/สต็อก/ราคาซัพพลายเออร์/ตรวจรถ</li>
+            <li>Fuel-adjusted pricing</li>
+            <li>Import ข้อมูลรายวันและสดย่อยย้อนหลัง (โครงสร้างข้อมูล + สคริปต์)</li>
+            <li>หน้า Finance — หนี้สิน งวดผ่อน Dashboard P&amp;L Cashflow (กรอกข้อมูลผ่าน UI)</li>
+            <li>Driver PWA คลื่นแรก — เข้าระบบ PIN, ตรวจรถ/แอลกอฮอล์, รูป+GPS, หน้าแอดมินตรวจงาน</li>
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-sm font-semibold text-amber-400 uppercase tracking-wide mb-2">ถัดไป</h3>
+          <ul class="list-disc list-inside text-slate-300 space-y-1 text-sm md:text-base">
+            <li>ทดลอง PIN คนขับ 1–2 คนในงานจริง</li>
+            <li>Driver — รูปงานต่อเที่ยว, OCR ใบเสร็จ/ตู้, ลายเซ็น, ดูรายได้จาก payroll</li>
+            <li>Line OA (แผน)</li>
+            <li>Open-book / Profit share ออฟฟิศ (แผน)</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="rounded-2xl border border-slate-800 bg-slate-900/30 p-6">
+      <h2 class="text-lg font-semibold text-white mb-3">งบประมาณเครื่องมือพัฒนา (อ้างอิง)</h2>
+      <p class="text-slate-300 text-sm leading-relaxed">
+        การอัปเกรดแพ็กเกจ AI/IDE (ประมาณ <span class="text-white font-medium">~200 USD/ปี</span> ช่วง) ใช้ลดเวลาเขียนระบบและเก็บ context งานยาว —
+        หน้านี้ใช้ประกอบการขออนุมัติงบได้โดยไม่ต้องเปิดเครื่องส่วนตัวให้รันแอป
+      </p>
+    </section>
+
+    <footer class="text-center text-xs text-slate-600 pt-4 border-t border-slate-800">
+      Y.K. Logistics Solutions — เอกสารภายใน · สร้างจากสรุปโปรเจกต์ Project YK
+    </footer>
+  </main>
+  <script>
+(function () {
+  const root = document.getElementById('stats-root');
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+  function fmt(n) {
+    if (n == null || n === '') return '—';
+    return Number(n).toLocaleString('th-TH');
+  }
+  function kvTable(obj) {
+    if (!obj || typeof obj !== 'object') return '';
+    const rows = Object.keys(obj).map(function (k) {
+      return '<tr><td class="py-1 pr-4 text-slate-400">' + esc(k) + '</td><td class="py-1 font-mono text-emerald-300">' + fmt(obj[k]) + '</td></tr>';
+    }).join('');
+    return '<table class="text-sm w-full max-w-md">' + rows + '</table>';
+  }
+  fetch('public-stats.json', { cache: 'no-store' })
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (d) {
+      const at = d.generated_at ? new Date(d.generated_at).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }) : '—';
+      const mb = d.db_file_bytes ? (d.db_file_bytes / 1048576).toFixed(1) : '—';
+      const counts = d.table_row_counts || {};
+      const cards = [
+        { label: 'พนักงานในระบบ', v: counts.employee },
+        { label: 'รถในระบบ', v: counts.vehicle },
+        { label: 'งานรายวัน (DailyJob)', v: counts.dailyjob },
+        { label: 'รายการสดย่อย', v: counts.pettycashtxn },
+        { label: 'รอบเงินเดือน (PayRun)', v: counts.payrun },
+        { label: 'รายการคำนวณเงินเดือน (บรรทัด)', v: counts.payrunitem },
+        { label: 'บันทึกซ่อม (MaintRecord)', v: counts.maintrecord },
+        { label: 'Driver session', v: counts.driversession },
+      ];
+      const cardHtml = '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">' + cards.map(function (c) {
+        return '<div class="rounded-lg border border-slate-700 bg-slate-900/80 p-3 text-center"><div class="text-2xl font-bold text-white">' + fmt(c.v) + '</div><div class="text-xs text-slate-500 mt-1">' + esc(c.label) + '</div></div>';
+      }).join('') + '</div>';
+
+      let rangeHtml = '';
+      if (d.daily_job_work_date_range) {
+        rangeHtml += '<p class="mb-2"><span class="text-slate-500">งานรายวัน — วันที่:</span> <span class="text-white">' + esc(d.daily_job_work_date_range.min) + '</span> ถึง <span class="text-white">' + esc(d.daily_job_work_date_range.max) + '</span></p>';
+      }
+      if (d.petty_date_range) {
+        rangeHtml += '<p class="mb-2"><span class="text-slate-500">สดย่อย — วันที่ (' + esc(d.petty_date_range.column) + '):</span> <span class="text-white">' + esc(d.petty_date_range.min) + '</span> ถึง <span class="text-white">' + esc(d.petty_date_range.max) + '</span></p>';
+      }
+      if (d.payroll_distinct_cycle_tags != null) {
+        rangeHtml += '<p class="mb-2"><span class="text-slate-500">จำนวน pay cycle ที่มีใน PayRun:</span> <span class="text-white">' + fmt(d.payroll_distinct_cycle_tags) + '</span></p>';
+      }
+
+      root.innerHTML =
+        '<p class="text-xs text-slate-500 mb-4">สร้าง snapshot: <span class="text-slate-300">' + esc(at) + '</span> · ขนาดไฟล์ DB โดยประมาณ: ' + esc(String(mb)) + ' MB</p>' +
+        cardHtml +
+        '<div class="grid md:grid-cols-2 gap-6 text-sm">' +
+        '<div><h3 class="font-semibold text-slate-300 mb-2">พนักงานตามไซท์ (home_site)</h3>' + kvTable(d.employee_count_by_home_site) + '</div>' +
+        '<div><h3 class="font-semibold text-slate-300 mb-2">รถตามไซท์</h3>' + kvTable(d.vehicle_count_by_home_site) + '</div>' +
+        '</div>' +
+        (d.payrun_by_status ? '<div class="mt-4"><h3 class="font-semibold text-slate-300 mb-2">สถานะ PayRun</h3>' + kvTable(d.payrun_by_status) + '</div>' : '') +
+        '<div class="mt-4 text-xs text-slate-500 border-t border-slate-800 pt-3">' + esc(d.disclaimer_th || '') + '</div>' +
+        '<div class="mt-2 text-xs text-slate-600">' + rangeHtml + '</div>';
+    })
+    .catch(function () {
+      root.innerHTML = '<p class="text-rose-400">โหลด public-stats.json ไม่สำเร็จ — ตรวจว่าไฟล์อยู่โฟลเดอร์เดียวกับ index.html หรือรัน build_public_stats.py ก่อน deploy</p>';
+    });
+})();
+  </script>
+</body>
+</html>

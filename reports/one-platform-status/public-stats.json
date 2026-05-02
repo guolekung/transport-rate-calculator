@@ -1,0 +1,44 @@
+{
+  "generated_at": "2026-05-02T00:20:38.244790+00:00",
+  "db_path_hint": "ProjectYK_System/app/app.db (local dev)",
+  "db_file_bytes": 57524224,
+  "table_row_counts": {
+    "employee": 63,
+    "vehicle": 169,
+    "customer": 0,
+    "dailyjob": 5210,
+    "pettycashtxn": 51466,
+    "payrun": 10,
+    "payrunitem": 180,
+    "driversession": 2,
+    "driversubmission": 0,
+    "loan": 0,
+    "loanpayment": 0,
+    "maintrecord": 146
+  },
+  "daily_job_work_date_range": {
+    "min": "2025-11-16",
+    "max": "2026-03-31"
+  },
+  "employee_count_by_home_site": {
+    "AYU": 31,
+    "BIGC": 10,
+    "LCB": 22
+  },
+  "vehicle_count_by_home_site": {
+    "": 53,
+    "AYU": 69,
+    "BIGC": 9,
+    "LCB": 38
+  },
+  "petty_date_range": {
+    "column": "txn_date",
+    "min": "2019-12-14",
+    "max": "2026-06-14"
+  },
+  "payroll_distinct_cycle_tags": 4,
+  "payrun_by_status": {
+    "draft": 10
+  },
+  "disclaimer_th": "สถิติรวมจากฐานข้อมูลพัฒนา (app.db) — ไม่มีชื่อบุคคล/ทะเบียน/ยอดเงินรายบรรทัด — โพสต์บน URL สาธารณะได้"
+}
