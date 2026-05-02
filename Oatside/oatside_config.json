@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "_help": "แก้ไฟล์นี้เพื่อเปลี่ยนกฎการคิดเงิน แล้วรัน build_oatside_reports.py ใหม่",
+  "trip_rates": [
+    {
+      "_note": "ช่วงวันที่พิเศษ (สงกรานต์ 2026)",
+      "from": "2026-04-12",
+      "to": "2026-04-15",
+      "rate_baht": 8000
+    },
+    {
+      "_note": "เรทปกติ (ใช้เมื่อไม่ตรงช่วงไหนข้างบน)",
+      "rate_baht": 7500
+    }
+  ],
+  "one_trip_surcharge_pct": 50,
+  "min_trips_per_truck_per_day": 2,
+  "max_travel_h": 48,
+  "max_origin_chain_gap_h": 3,
+  "_note_max_origin_chain_gap_h": "hours: max gap Origin_Out(prev)->Origin_In(next) for chain-merge; larger gap = new hub visit (see ProjectYK_System/TransportRateCalculator/docs/OATSIDE_ORIGIN_CHAIN_MERGE_FIX.md)"
+}
