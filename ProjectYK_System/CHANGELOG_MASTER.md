@@ -2,6 +2,10 @@
 
 สรุปการตัดสินใจสำคัญระดับภาพรวมข้ามทุกโมดูล
 
+## 2026-05-01 (Oatside — Unmatched เวลาอยู่จุด + gap ถึง In ถัดไป)
+
+- **`Oatside/build_oatside_reports.py`**: `build_leg_timeline_by_plate` / `um_leg_dwell_gap_h` — คอลัมน์ **อยู่จุด (ชม.)** / **ถึงเข้าครั้งถัดไป (ชม.)** (HTML + Excel **Unmatched_Log** `Dwell_h`, `Gap_to_next_In_h`); แถว matched บน `trips`/`plates` เป็น `—` — **`ProjectYK_System/tools/apply_oatside_um_v2.py`** + อัปเดต **`OATSIDE_CUSTOMER_REPORT_SPEC.md`**
+
 ## 2026-05-04 (Oatside HTML — hero หน้าเที่ยว + Excel ขวาหัวแต่ละตาราง)
 
 - **`Oatside/build_oatside_reports.py`**: ลบบล็อก **คำอธิบายสี / ไฮไลต์ชั่วโมงรอ**; แถบ **hero** ชวนเปิด `trips.html` + ลิงก์ Excel รวม; ลิงก์ **ดาวน์โหลด Excel** อยู่ **ขวาใน `<summary>`** ของแต่ละหัวข้อ; **`trips.html`** เน้น “หน้าหลักลูกค้า” + ปุ่ม Excel Trip Detail ขวาหัวตาราง — **`ProjectYK_System/tools/patch_oatside_hero_xlsx_inline.py`**

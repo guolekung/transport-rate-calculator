@@ -573,6 +573,28 @@ def hours(a: datetime, b: datetime) -> float:
     return (b - a).total_seconds() / 3600.0
 
 
+def build_leg_timeline_by_plate(o_legs: list[Leg], d_legs: list[Leg]) -> dict[str, list[Leg]]:
+    """Merge Origin+Dest legs per plate, sorted by In time (gap to next In)."""
+    by: dict[str, list[Leg]] = defaultdict(list)
+    for L in o_legs + d_legs:
+        by[L.plate].append(L)
+    for p in by:
+        by[p].sort(key=lambda z: z.t_in)
+    return by
+
+
+def um_leg_dwell_gap_h(leg: Leg, timeline: list[Leg] | None) -> tuple[float, float | None]:
+    """Dwell at stop (Out−In); gap hours from this Out to next leg In on same plate."""
+    dwell = max(0.0, hours(leg.t_in, leg.t_out))
+    if not timeline:
+        return dwell, None
+    idx = next((i for i, L in enumerate(timeline) if L is leg), None)
+    if idx is None or idx + 1 >= len(timeline):
+        return dwell, None
+    gap = hours(leg.t_out, timeline[idx + 1].t_in)
+    return dwell, gap
+
+
 def customer_idle_clip_dest_wait_h(trip: Trip, cfg: OatsideConfig) -> float:
     """Subtract hours of (Dest_In, Dest_Out) overlapping customer_idle_windows for this plate."""
     raw = hours(trip.d_in, trip.d_out)
@@ -1921,6 +1943,7 @@ def write_excel(
     hint_rows: list[dict],
     pday_rows: list[dict],
     cpd_rows: list[dict],
+    leg_timeline_by_plate: dict[str, list[Leg]],
 ) -> None:
     base_baht = base_trips_revenue_baht(trips, cfg) + sum_manual_extra_baht(cfg)
     pday = pday_rows
@@ -2069,9 +2092,23 @@ def write_excel(
 
     # --- Unmatched Log ---
     um = wb.create_sheet("Unmatched_Log")
-    um.append(["Source", "Plate", "Device", "Row_No", "In", "Out"])
+    um.append(
+        ["Source", "Plate", "Device", "Row_No", "In", "Out", "Dwell_h", "Gap_to_next_In_h"]
+    )
     for src, leg, _ in sorted(unmatched, key=lambda x: (x[2], x[1].t_in)):
-        um.append([src, leg.plate, leg.device, leg.row_no, leg.t_in, leg.t_out])
+        d_dw, g_gap = um_leg_dwell_gap_h(leg, leg_timeline_by_plate.get(leg.plate))
+        um.append(
+            [
+                src,
+                leg.plate,
+                leg.device,
+                leg.row_no,
+                leg.t_in,
+                leg.t_out,
+                round(d_dw, 4),
+                round(g_gap, 4) if g_gap is not None else "",
+            ]
+        )
 
     # --- Daily Activity ---
     da = wb.create_sheet("Daily_Activity")
@@ -2267,6 +2304,8 @@ def unmatched_merged_trip_one_row_html(
     src: str,
     leg: Leg,
     *,
+    dwell_h: float,
+    gap_h: float | None,
     include_plate_link: bool = True,
     include_plate_column: bool = True,
 ) -> str:
@@ -2296,6 +2335,7 @@ def unmatched_merged_trip_one_row_html(
         f"<tr class='um' data-plate='{esc(leg.plate)}'><td>{od}</td><td>{dd}</td>{site_plate}"
         f"<td>{oi}</td><td>{oo}</td><td>{di}</td><td>{do}</td>"
         f"<td>{dash}</td><td>{dash}</td><td>{dash}</td>"
+        f"<td>{fmt_hm(dwell_h)}</td><td>{fmt_hm(gap_h) if gap_h is not None else dash}</td>"
         f"<td>{dash}</td><td>{dash}</td><td>{dash}</td><td>{dash}</td><td>{dash}</td></tr>"
     )
 
@@ -2507,6 +2547,7 @@ def interleaved_matched_unmatched_rows_html(
     plate: str | None = None,
     include_plate_link: bool = True,
     include_plate_column: bool = True,
+    leg_timeline_by_plate: dict[str, list[Leg]] | None = None,
 ) -> str:
     """Sort matched by Origin_In time; unmatched by leg t_in (UM-O=Origin, UM-D=Dest)."""
     rows: list[tuple[datetime, tuple[Any, ...], str]] = []
@@ -2519,9 +2560,14 @@ def interleaved_matched_unmatched_rows_html(
     for src, leg, _mp in unmatched:
         if plate is not None and leg.plate != plate:
             continue
+        _dw, _gp = um_leg_dwell_gap_h(
+            leg, leg_timeline_by_plate.get(leg.plate) if leg_timeline_by_plate else None
+        )
         um_html = unmatched_merged_trip_one_row_html(
             src,
             leg,
+            dwell_h=_dw,
+            gap_h=_gp,
             include_plate_link=include_plate_link,
             include_plate_column=include_plate_column,
         )
@@ -2558,6 +2604,7 @@ def write_html(
     nw_total_baht: int,
     cfg: OatsideConfig,
     cpd_rows: list[dict],
+    leg_timeline_by_plate: dict[str, list[Leg]],
 ) -> None:
     bc_a, bc_c, bc_s, bc_e, lc_a, lc_c, lc_s, lc_e = bc
     thr = iqr_threshold([t.travel_h for t in trips])
@@ -2576,13 +2623,18 @@ def write_html(
     for m in cfg.manual_return_trips:
         k = (str(m.plate), m.dest_date)
         ret_by_pd[k] = int(ret_by_pd.get(k, 0)) + int(m.amount_baht)
-    um_section_html = "".join(
-        f"<tr><td><span class='badge abn'>{'UM-O' if src == 'Origin' else 'UM-D'}</span></td>"
-        f"<td><a href='plates/{esc(leg.plate)}.html'>{esc(leg.plate)}</a></td>"
-        f"<td>{leg.t_in}</td><td>{leg.t_out}</td>"
-        f"<td class='note'>{'Origin ไม่มีคู่' if src == 'Origin' else 'Dest ไม่มีคู่'}</td></tr>"
-        for src, leg, _ in sorted(unmatched, key=lambda x: x[1].t_in)
-    ) or "<tr><td colspan=5 class='note'>ไม่มี Unmatched</td></tr>"
+    _um_rows: list[str] = []
+    for src, leg, _ in sorted(unmatched, key=lambda x: x[1].t_in):
+        _dwell, _gap = um_leg_dwell_gap_h(leg, leg_timeline_by_plate.get(leg.plate))
+        _gap_cell = fmt_hm(_gap) if _gap is not None else "—"
+        _um_rows.append(
+            f"<tr><td><span class='badge abn'>{'UM-O' if src == 'Origin' else 'UM-D'}</span></td>"
+            f"<td><a href='plates/{esc(leg.plate)}.html'>{esc(leg.plate)}</a></td>"
+            f"<td>{leg.t_in}</td><td>{leg.t_out}</td>"
+            f"<td class='note'>{fmt_hm(_dwell)}</td><td class='note'>{_gap_cell}</td>"
+            f"<td class='note'>{'Origin ไม่มีคู่' if src == 'Origin' else 'Dest ไม่มีคู่'}</td></tr>"
+        )
+    um_section_html = "".join(_um_rows) or "<tr><td colspan=7 class='note'>ไม่มี Unmatched</td></tr>"
     sub = (
         f"สร้าง {datetime.now():%Y-%m-%d %H:%M} | ต้นทาง: {esc(Path(origin_label).name)} | "
         f"เรท: {config_rate_summary(cfg)} ฿/เที่ยว | "
@@ -2626,6 +2678,7 @@ def write_html(
             f"<td><a href='plates/{esc(t.plate)}.html'>{esc(t.plate)}</a>{ab}</td>"
             f"<td>{t.o_in}</td><td>{t.o_out}</td><td>{t.d_in}</td><td>{t.d_out}</td>"
             f"{_td_wait_h(t.origin_wait_h, _hi_o, False)}<td>{fmt_hm(t.travel_h)}</td>{_td_wait_h(t.dest_wait_h, _hi_d, True)}"
+            f"<td>—</td><td>—</td>"
             f"{money}</tr>"
         )
 
@@ -2636,6 +2689,7 @@ def write_html(
         plate=None,
         include_plate_link=True,
         include_plate_column=True,
+        leg_timeline_by_plate=leg_timeline_by_plate,
     )
 
     def trip_row_plate(t: Trip) -> str:
@@ -2658,6 +2712,7 @@ def write_html(
             f"<tr data-plate='{esc(t.plate)}'><td>{t.origin_date}</td><td>{t.dest_date}</td><td>{t.site}{ab}</td>"
             f"<td>{t.o_in}</td><td>{t.o_out}</td><td>{t.d_in}</td><td>{t.d_out}</td>"
             f"{_td_wait_h(t.origin_wait_h, _hi_o, False)}<td>{fmt_hm(t.travel_h)}</td>{_td_wait_h(t.dest_wait_h, _hi_d, True)}"
+            f"<td>—</td><td>—</td>"
             f"{money}</tr>"
         )
 
@@ -2769,8 +2824,8 @@ def write_html(
 </details>
 <details class='section-fold'><summary class='section-sum section-sum-row'><span class='sum-main'>(3) Unmatched — {len(unmatched)} legs เรียงตามเวลา</span><span class='sum-dl'>{_xlsx_dl('03_Unmatched_Legs.xlsx', 'ตาราง (3)')}</span></summary>
 <div class='panel'>
-<p class='sub'>UM-O = Origin ไม่มี Dest คู่ · UM-D = Dest ไม่มี Origin คู่ · max_travel_h={cfg.max_travel_h}h · match เลือก Origin ที่ t_in ล่าสุดก่อน Dest</p>
-<table><thead><tr><th>ประเภท</th><th>ทะเบียน</th><th>เวลาเข้า</th><th>เวลาออก</th><th>เหตุผล</th></tr></thead><tbody>
+<p class='sub'>UM-O = Origin ไม่มี Dest คู่ · UM-D = Dest ไม่มี Origin คู่ · max_travel_h={cfg.max_travel_h}h · match เลือก Origin ที่ t_in ล่าสุดก่อน Dest · <b>อยู่จุด (ชม.)</b> = เวลาระหว่างเข้า–ออกของแถวนั้น · <b>ถึงเข้าครั้งถัดไป</b> = จากเวลาออกของแถวนี้ถึงเวลาเข้าของเหตุการณ์ถัดไป (เรียงทะเบียนเดียวกัน จากไฟล์ Origin+Dest)</p>
+<table><thead><tr><th>ประเภท</th><th>ทะเบียน</th><th>เวลาเข้า</th><th>เวลาออก</th><th>อยู่จุด (ชม.)</th><th>ถึงเข้าครั้งถัดไป (ชม.)</th><th>เหตุผล</th></tr></thead><tbody>
 {um_section_html}
 </tbody></table></div>
 </details>
@@ -2797,7 +2852,7 @@ def write_html(
 <p class='sub'>เรียงตามเวลา (matched ใช้ Origin In · unmatched ใช้เวลาขา Origin/Destination) — UM-O/UM-D เว้นฝั่งที่ยังไม่มีคู่เป็น —<br>
 <b>ค่าเงิน:</b> ค่าขนส่ง = เรทวัน Dest_In ของเที่ยวนั้น · <b>เสียเวลา+50%/+100%</b> = ยอดรวมส่วนเพิ่ม fifty ของ (ทะเบียน×วัน Dest_In) แสดงที่แถวแรกของวันนั้น — <b>ไม่ได้คิดจากชั่วโมงในช่อง Dest Wait โดยตรง</b> (สีส้ม = แค่เตือนว่ารอปลายทางเกินเกณฑ์) · <b>ขากลับ(฿)</b> = ยอดจาก <code>manual_return_trips</code> แสดงที่แถวแรกของวันนั้น (ไม่เพิ่มจำนวนเที่ยว matched)</p>
 <div class='filter-bar'><label for='tripsPlateFilter'>กรองทะเบียน</label><select id='tripsPlateFilter'><option value=''>ทุกคัน</option>{_trips_plate_opts}</select><label for='tripsPlateQuery' style='margin-left:6px'>ค้นหา</label><input id='tripsPlateQuery' type='search' placeholder='พิมพ์ค้นหา...' autocomplete='off'></div>
-<div class='table-scroll'><table id='tripsAllTable'><thead><tr><th>Origin Date</th><th>Dest Date</th><th>Site</th><th>ทะเบียน</th><th>Origin In</th><th>Origin Out</th><th>Dest In</th><th>Dest Out</th><th>Orig Wait</th><th>Travel</th><th>Dest Wait</th><th>ค่าขนส่ง(฿)</th><th>เสียเวลา+50%(฿)</th><th>เสียเวลา+100%(฿)</th><th>ตีเปล่า+50%(฿)</th><th>ขากลับ(฿)</th></tr></thead><tbody>
+<div class='table-scroll'><table id='tripsAllTable'><thead><tr><th>Origin Date</th><th>Dest Date</th><th>Site</th><th>ทะเบียน</th><th>Origin In</th><th>Origin Out</th><th>Dest In</th><th>Dest Out</th><th>Orig Wait</th><th>Travel</th><th>Dest Wait</th><th>อยู่จุด UM (ชม.)</th><th>ถึงเข้าครั้งถัดไป (ชม.)</th><th>ค่าขนส่ง(฿)</th><th>เสียเวลา+50%(฿)</th><th>เสียเวลา+100%(฿)</th><th>ตีเปล่า+50%(฿)</th><th>ขากลับ(฿)</th></tr></thead><tbody>
 {merged_all_rows}
 </tbody></table></div></div>
 """
@@ -2876,6 +2931,7 @@ def write_html(
             plate=p,
             include_plate_link=False,
             include_plate_column=False,
+            leg_timeline_by_plate=leg_timeline_by_plate,
         )
         pg = f"""<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>{esc(p)}</title><style>{css}</style></head><body>
@@ -2884,7 +2940,7 @@ def write_html(
 <div class='panel'><h3>{summary_hdr}</h3>{summary_sub}<table><thead>{day_thead}</thead><tbody>{day_tbl}</tbody></table></div>
 <div class='panel'><h3>รายเที่ยว (matched + unmatched)</h3>
 <p class='sub'>เรียงตามเวลา (matched ใช้ Origin In · unmatched ใช้เวลาขา Origin/Destination) — UM-O/UM-D เว้นฝั่งที่ยังไม่มีคู่เป็น —<br>หัวตารางล่างเลื่อนตามแบบ freeze แถว (เลื่อนในกรอบ)</p>
-<div class='table-scroll'><table><thead><tr><th>Origin Date</th><th>Dest Date</th><th>Site</th><th>Origin In</th><th>Origin Out</th><th>Dest In</th><th>Dest Out</th><th>Orig Wait</th><th>Travel</th><th>Dest Wait</th><th>ค่าขนส่ง(฿)</th><th>เสียเวลา+50%(฿)</th><th>เสียเวลา+100%(฿)</th><th>ตีเปล่า+50%(฿)</th><th>ขากลับ(฿)</th></tr></thead><tbody>{merged_plate_rows}</tbody></table></div></div>
+<div class='table-scroll'><table><thead><tr><th>Origin Date</th><th>Dest Date</th><th>Site</th><th>Origin In</th><th>Origin Out</th><th>Dest In</th><th>Dest Out</th><th>Orig Wait</th><th>Travel</th><th>Dest Wait</th><th>อยู่จุด UM (ชม.)</th><th>ถึงเข้าครั้งถัดไป (ชม.)</th><th>ค่าขนส่ง(฿)</th><th>เสียเวลา+50%(฿)</th><th>เสียเวลา+100%(฿)</th><th>ตีเปล่า+50%(฿)</th><th>ขากลับ(฿)</th></tr></thead><tbody>{merged_plate_rows}</tbody></table></div></div>
 </body></html>"""
         (plates_dir / f"{p}.html").write_text(pg, encoding="utf-8")
 
@@ -2922,6 +2978,7 @@ def main() -> None:
     merge_manual_return_into_audit(audit_rows, cfg)
     base_baht = base_trips_revenue_baht(trips, cfg) + sum_manual_extra_baht(cfg)
     o_legs_all = parse_legs(origin_path)
+    leg_timeline_by_plate = build_leg_timeline_by_plate(o_legs_all, parse_legs(dest_path))
     nw_rows, nw_total = no_work_outbound_rows(trips, cfg)
     pday_rows = plate_dest_day_rows(trips, fifty_rows, cfg, nw_rows=nw_rows)
     merge_manual_extra_into_pday(pday_rows, cfg)
@@ -2959,6 +3016,7 @@ def main() -> None:
         hint_rows,
         pday_rows,
         cpd_rows,
+        leg_timeline_by_plate,
     )
     report_dir = _root() / "TransportRateCalculator" / "reports" / "oatside-apr2026"
     write_split_excel_exports(
@@ -2989,6 +3047,7 @@ def main() -> None:
         int(nw_total),
         cfg,
         cpd_rows,
+        leg_timeline_by_plate,
     )
 
     print(f"Config:  {_config_path()}")
