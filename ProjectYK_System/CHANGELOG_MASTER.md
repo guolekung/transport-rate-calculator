@@ -2,22 +2,61 @@
 
 สรุปการตัดสินใจสำคัญระดับภาพรวมข้ามทุกโมดูล
 
-## 2026-05-04 (Deploy safety — push แบบ opt-in + preflight + เอกสาร TH)
+## 2026-05-04 (Oatside HTML — hero หน้าเที่ยว + Excel ขวาหัวแต่ละตาราง)
 
-- **`deploy.ps1` / `deploy_oatside_report.ps1`**: ค่าเริ่มต้น **commit เท่านั้น** — ต้อง **`-Push`** จึง push (one-click `.bat` ส่ง **`-Push`** ให้) · **`deploy_one_click_local.bat`**, **`preflight_deploy.ps1`**, **`docs/DEPLOY_SAFETY_TH.md`**
-- กู้งาน stash (Oatside/เอกสาร) ด้วย `git stash apply` ลง working tree
+- **`Oatside/build_oatside_reports.py`**: ลบบล็อก **คำอธิบายสี / ไฮไลต์ชั่วโมงรอ**; แถบ **hero** ชวนเปิด `trips.html` + ลิงก์ Excel รวม; ลิงก์ **ดาวน์โหลด Excel** อยู่ **ขวาใน `<summary>`** ของแต่ละหัวข้อ; **`trips.html`** เน้น “หน้าหลักลูกค้า” + ปุ่ม Excel Trip Detail ขวาหัวตาราง — **`ProjectYK_System/tools/patch_oatside_hero_xlsx_inline.py`**
+- **`Oatside/build_oatside_reports.py`**: CSS `summary.section-sum-row` ให้เต็มความกว้าง + ดันลิงก์ Excel ชิดขวา; ข้อความ **(คลิกเพื่อขยาย)** ของ Audit ย้ายไปหน้าหัวข้อ — **`ProjectYK_System/tools/patch_oatside_summary_flex_audit.py`**
 
-## 2026-05-01 (Oatside — เอกสารสเปกรายงานลูกค้า `OATSIDE_CUSTOMER_REPORT_SPEC.md`)
+## 2026-05-04 (Oatside Excel — export แยกต่อตาราง + จัดรูปแบบ)
 
-- สรุปเงื่อนไขที่ตกลง: hero/index, ลิงก์ `exports/*.xlsx` ขวาหัว section, หน้า `trips` + filter + Trip Detail, pipeline `beautify` + `write_split_excel_exports`, checklist หลัง build — อ้างอิง `ProjectYK_System/TransportRateCalculator/docs/OATSIDE_CUSTOMER_REPORT_SPEC.md`
+- **`Oatside/build_oatside_reports.py`**: `beautify_oatside_workbook` (หัวตารางสีแบรนด์, zebra, filter, freeze, คอลัมน์เงิน `#,##0`) + **`write_split_excel_exports`** → โฟลเดอร์ **`reports/oatside-apr2026/exports/*.xlsx`** 14 ไฟล์ — **`ProjectYK_System/tools/patch_oatside_excel_exports.py`** (ลิงก์จาก UI ย้ายไปขวาหัวแต่ละตารางใน Session #107)
 
-## 2026-05-01 (Oatside — กู้ชุดลูกค้า: hero + Excel `exports/` + หัว section + trips filter)
+## 2026-05-01 (Oatside HTML — กรองทะเบียน trips + พับหัวข้อสรุป)
 
-- Re-apply ลำดับ patch บน `Oatside/build_oatside_reports.py` (baseline ปัจจุบัน): index fold + trips filter / `write_split_excel_exports` + beautify / hero + ลิงก์ดาวน์โหลดขวา / Audit flex — แก้สคริปต์ patch + `regenerate_oatside_idx_segment_raw.py` + `_idx_segment_raw.txt` ให้ตรงไฟล์จริง
+- **`Oatside/build_oatside_reports.py`**: `trips.html` — `<select>` + ช่องค้นหา + `data-plate` ต่อแถว + JS กรอง; **`index.html`** — หัวข้อสรุป/รายทะเบียน ใช้ `<details class='section-fold'>` แบบ Audit — **`ProjectYK_System/tools/apply_oatside_ui_trips_filter_index_fold.py`**
 
-## 2026-05-04 (GitHub Pages — deploy เครื่องคิดเรท `index.html` + เก็บต้นทาง `transport_rate_calculator.html`)
+## 2026-05-01 (Oatside — manual_return_trips: ค่าขนส่งขากลับ flat)
 
-- Repo **`transport-rate-calculator`**: commit **`b2993ae`** — อัปเดต **`index.html`** จากเนื้อหาเดียวกับ **`ProjectYK_System/TransportRateCalculator/transport_rate_calculator.html`** และเพิ่มไฟล์ต้นทางใน repo — push **`main`** สำเร็จ (remote แจ้งย้ายไป org **`yk-logistics`**)
+- **`Oatside/build_oatside_reports.py`** + **`Oatside/oatside_config.json`**: `manual_return_trips` (ไม่เพิ่ม matched) — คอลัมน์ **ขากลับ(฿)** บน HTML + Excel `Return_trip_baht` / ชีต **`Manual_Return_Trips`** + บรรทัด **R** ใน Customer_Summary — `ProjectYK_System/tools/apply_oatside_manual_return_trips.py`
+
+## 2026-05-01 (Oatside — manual_extra_trips: เที่ยวลูกค้าตกลงแต่ไม่มีใน GPS)
+
+- **`Oatside/build_oatside_reports.py`** + **`Oatside/oatside_config.json`**: `manual_extra_trips` บวกเข้าฐาน/audit/CPD + ชีต **`Manual_Extra_Trips`**; **`ProjectYK_System/tools/patch_oatside_manual_extra_trips.py`** (แก้ anchor + comma ใน default JSON)
+
+## 2026-05-01 (Oatside — คอลัมน์เงิน trips + dedupe origin24h + sticky หัวตาราง)
+
+- **`Oatside/build_oatside_reports.py`**: คำอธิบายใต้ `trips.html` ว่าคอลัมน์เงินไม่ได้มาจากชั่วโมง Dest Wait โดยตรง; **อย่างมากหนึ่ง** surcharge `origin24h` ต่อ `(ทะเบียน, วัน Dest_In)` เพื่อกันซ้ำ 3,750+3,750=7,500; ตารางเที่ยวใช้ **`.table-scroll` + `thead th` sticky** (`trips.html`, `plates/*.html`)
+- **`Oatside/build_oatside_reports.py`**: แถวตารางเที่ยวแบ่งโทนสีตามวัน (`day-band-0`/`day-band-1`; matched ยึด **Origin_In**, UM-D ใช้เวลา leg แทน) + รักษาไฮไลต์รอนาน; **เรียง matched ตาม `Origin_In`** ใน `interleaved_matched_unmatched_rows_html`
+
+## 2026-05-01 (Oatside HTML — ป้าย surcharge: +100% ข้ามคืน + แยก ตีเปล่า / ค่าเสียเวลา)
+
+- **`Oatside/build_oatside_reports.py`**: `fifty_kind` + `html_fifty_surcharge_badge` + คอลัมน์ **`Fifty_kind`** ใน Excel; การ์ด/ตาราง HTML ใช้คำว่า **ส่วนเพิ่ม** แทน +50% ตายตัว — `ProjectYK_System/tools/apply_oatside_fifty_patch.py`, `patch_oatside_audit_sub.py`
+- **แก้ #98**: default วันงาน Origin 1 เที่ยว = **`downtime_origin_day`** (ป้าย **ค่าเสียเวลา +50%**); **ตีเปล่า** เฉพาะ `action: blank_run` หรือ note มี «ตีเปล่า»; ข้ามคืนเต็มเรท = **ค่าเสียเวลา +100%** — `ProjectYK_System/tools/patch_oatside_fifty_kind_v2.py`
+- **#99**: คอลัมน์ส่วนเพิ่ม HTML — **หลายป้ายต่อวัน**; **No-work recovery** แสดงเป็น **ตีเปล่า +50%** ในคอลัมน์เดียวกับ fifty — `patch_oatside_multi_badge_nw.py`
+
+## 2026-05-03 (Oatside — พิมพ์เขียว schema สำหรับ Claude บนเว็บ / Artifacts)
+
+- **`TransportRateCalculator/docs/OATSIDE_BACKEND_SCHEMA.md`**: สรุปข้อมูล/ pipeline / billing / ชีต Excel / HTML สำหรับโยนให้ฝั่งเว็บออกแบบ UI โดยไม่ต้องอ่านทั้ง repo
+
+## 2026-05-02 (Oatside — ปลายทางรอข้ามคืน → fifty เติมตาม `dest_date` + deploy.ps1)
+
+- **`Oatside/build_oatside_reports.py`**: `long_dest_wait_midnight_fifty` + `supplement_long_dest_wait_midnight_fifty` (เช่น 71-6802 รอปลายทางข้ามคืน แต่ไม่มี Origin วันนั้น) — `ProjectYK_System/tools/patch_oatside_midnight_dwell_fifty.py`
+- **`long_dest_wait_midnight_full_trip`** (default true): ค่าเติมข้ามคืน = **เรทเต็ม 1 เที่ยว** (ไม่ใช่แค่ +50%); **ไฮไลต์** รอต้นทาง/ปลายทางเกินเกณฑ์ชม. บน HTML — `patch_oatside_full_trip_midnight_highlight.py`
+- **`deploy_oatside_report.ps1`**: แก้ `throw`/here-string ที่ทำให้ PowerShell parse พัง
+
+## 2026-05-01 (Oatside — wave3: default `use_origin_24h_fifty` + no-work recovery + phantom/hints)
+
+- **`Oatside/build_oatside_reports.py`**: default **`use_origin_24h_fifty=True`**; **`customer_no_work`** + **`outbound_half_dest_dates`** (auto วันหลังจบช่วง); บรรทัด **D** / รวม grand; **`Trip_Detail.Nw_outbound50_baht`**; ชีต **`NoWork_Outbound_50pct`**, **`Phantom_Trip_Candidates`**, **`Hints_DoubleOrigin`**; HTML **`grand_extra`** รวม no-work — สคริปต์ `ProjectYK_System/tools/apply_oatside_wave3_*.py`
+- **นโยบาย recovery + fifty**: โอเลือก **เก็บคู่** (เที่ยวแรกวัน recovery อาจได้ทั้ง fifty ดาวน์ไทม์และ No-work 50% — บวกทั้งคู่); ชีต **Info** แถว **`Policy_recovery_plus_fifty`** — `ProjectYK_System/tools/apply_oatside_recovery_policy_info.py`
+
+## 2026-05-02 (Oatside build — `customer_idle_windows` + optional `use_origin_24h_fifty`)
+
+- **`Oatside/build_oatside_reports.py`**: ตัด `Dest_Wait` ช่วงฝากลูกค้า (`customer_idle_windows`, default **71-8967** 20–29 เม.ย.); `Trip_Detail` คอลัมน์ customer wait/cycle; **`use_origin_24h_fifty`** สลับกฎ +50% เป็น rolling 24h จาก `Origin_In` — `OATSIDE_TRIP_PAIRING_MERGE_HANDOFF.md`; patch scripts ใต้ `ProjectYK_System/tools/patch_oatside_*.py`
+
+## 2026-05-02 (Agent workflow — ถามก่อนลงมือ + Oatside เคส 71-8967)
+
+- **นโยบายทุกแชท**: ถ้าคำสั่งยังกำกวม → **ถามให้เคลียร์ก่อนลงมือ** — `.cursor/rules/oa-careful-default.mdc`, `.cursor/rules/project-yk-context.mdc` §1b, `AGENTS.md`
+- **Oatside / ฝากรถ P&G**: **`71-8967`** ช่วง **`2026-04-20 ~14:00`–`2026-04-29 ~17:00` (ไทย)** — เที่ยวส่งก่อนจอด **นับลูกค้าปกติ**; ช่วงจอดในโรงงานหลังนั้น **ไม่เกี่ยวลูกค้า** (ยกเว้น dwell/เตือน); หลัง `Dest_Out` ถ้ามีวิ่งต่อนับตีเปล่าปกติ — `CONTEXT_LOG.md` Session #91
 
 ## 2026-05-02 (Oatside — ชีต/หน้าเว็บ «จำนวนเที่ยวต่อวัน» สำหรับลูกค้า)
 
@@ -635,4 +674,4 @@
 - ปรับคำนวณน้ำมันให้แยกตามประเภทรถในงานเสนอราคา Direct-to-store: 6W `5.5 กม./ลิตร`, 10W `4.5 กม./ลิตร` พร้อมเพิ่มตัวชี้วัด `%น้ำมันต่อค่าขนส่ง` ต่อรูท
 - เปลี่ยนเงื่อนไขเจรจาน้ำมันเป็น `1.5% ต่อ 1 บาท` และ reprice ในไฟล์ทำงาน (`_v3_adjusted_only`) ให้ margin ที่ fuel target 50 ยังอยู่ราว 10%
 - อัปเดตเงื่อนไขราคาดีล Direct-to-store เพิ่มเติม: 6W consumption = `5.0`, ค่าเที่ยวแบบ distance ladder (`0-200 = 500/600`, แล้ว +100 ต่อทุก 100 กม.), และโซนเชิงกลยุทธ์ `สมุทรปราการ/ฉะเชิงเทรา/ชลบุรี` ใช้ target margin `5%`
-
+- **2026-05-01 (Oatside reports):** 	rips.html/รายเที่ยวต่อทะเบียน — คอลัมน์ ค่าขนส่ง / เสียเวลา+50% / เสียเวลา+100% / ตีเปล่า+50%; No-work recovery รองรับข้ามคืน (irst_no_work_trip_by_plate_recovery_day + synthetic plate_dest_day_rows)

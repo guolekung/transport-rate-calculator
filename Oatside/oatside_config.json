@@ -35,5 +35,22 @@
       "to": "2026-05-01",
       "note": "customer no-work"
     }
+  ],
+  "manual_extra_trips": [
+    {
+      "dest_date": "2026-04-22",
+      "plate": "72-1217",
+      "amount_baht": 7500,
+      "note": "P&G → Oatside (เที่ยวเพิ่ม — ไม่มีใน GPS)"
+    }
+  ],
+  "_note_manual_extra_trips": "เที่ยวที่ลูกค้าตกลงเก็บแต่ไม่มีในไฟล์ GPS — ลบ array ได้ถ้าไม่ใช้",
+  "manual_return_trips": [
+    {
+      "dest_date": "2026-04-22",
+      "plate": "72-1217",
+      "amount_baht": 7500,
+      "note": "ค่าขนส่งงานขากลับ (manual — ไม่มีใน GPS)"
+    }
   ]
 }

@@ -2910,93 +2910,355 @@ Parser ใหม่:
 
 ---
 
-## 2026-05-04 (Session Summary #90 - Transport calculator: ขึ้น Git แทนของเก่า)
+## 2026-05-02 (Session Summary #90 - Oatside billing: นิยาม 24 ชม. จาก Origin_In + ข้อยกเว้น + config มือ)
 
 ### บริบทจากผู้ใช้
-- ต้องการให้ **`ProjectYK_System/TransportRateCalculator/transport_rate_calculator.html`** เป็นเวอร์ชันที่โชว์บน Git (แทนของเก่า) — หน้า root GitHub Pages ใช้ **`index.html`**
+- ต่อจากการคุยกฎค่าเสียเวลา 50% / ตีเปล่า / 0 เที่ยว / บรรทัดเดียว 200% — โอล็อกนิยามและข้อยกเว้น
 
-### การตัดสินใจรอบนี้
-- บน remote **`origin/main`** ไม่มีไฟล์ต้นทางใน path นี้; เนื้อหาที่ deploy ล่าสุดในเครื่องสอดคล้องกับ commit **`6ea72f6`** (`index.html` กับ `transport_rate_calculator.html` เป็น blob เดียวกัน)
-- commit **`b2993ae`**: อัปเดต **`index.html`** + เพิ่ม **`ProjectYK_System/TransportRateCalculator/transport_rate_calculator.html`** ใน repo — **`git push origin main`** สำเร็จ · `main` ติดตาม **`origin/main`**
-- หมายเหตุ: remote แจ้ง repo ย้ายไป **`https://github.com/yk-logistics/transport-rate-calculator.git`** — พิจารณา `git remote set-url origin …` ภายหลัง
-- งานค้างในเครื่องก่อน sync ถูก **`git stash`** ไว้ (`stash@{0}`); การ `stash pop` ชน conflict เลย **`git reset --hard`** กลับไปที่ **`b2993ae`** — stash ยังอยู่ ใช้ **`git stash pop`** เมื่อพร้อมจัด conflict
-
-### สิ่งที่ทำแล้ว
-- Push เครื่องคิดเรทขึ้น GitHub แล้ว (root **`index.html`**)
+### การตัดสินใจรอบนี้ (รอ implement ใน `build_oatside_reports.py` + เอกสาร)
+- **A — หน้าต่าง 24 ชม.**: นับจาก **`Origin_In` ครั้งแรกของวัน**; ถ้า **เข้าต้นทางซ้ำโดยไม่มี Dest ระหว่างทาง** → default **ยังนับ** แต่ต้องมี **โน้ต/แถวเตือน** ให้โอเห็นว่ามี **เข้า–ออก 2 รอบ** หรือมี **Unmatched** เพื่อไปแก้มือ
+- **B — 0 เที่ยว vs มีงาน**: **ไม่ได้งานเลย (0 เที่ยว)** → เก็บ **1 เที่ยวเต็ม**; ถ้า **ได้ขึ้นแล้วกำลังไปส่ง** ไม่ว่าจบหรือไม่จบ **ภายใน 24 ชม.** → เก็บ **1 เที่ยวปกติ + ค่าเสียเวลา 50%**; พอครบ 24 ชม. รอบถัดไปที่ **`Origin_In`** เริ่มนับ **เที่ยว 1 ใหม่** = **คนละวัน/รอบกับก่อนหน้า**
+- **200%**: อ้างอิง **ฐานเดียวกันของวันนั้น**
+- **ตีเปล่า 50%**: ใช้กับ **เที่ยวแรกของวันที่เข้า `Origin_In`** (ขาไปตามที่คุยก่อนหน้า)
+- **F — unmatched นับชม.รอเข้า**: โอ **โอเค** ให้ทำนอกสคริปต์ build ก่อน — **JSON / override ที่แอดมินแก้**; ต้องมีสเปกไฟล์และตัวอย่างก่อนลงโค้ด (ไม่บังคับปุ่มเว็บตอนนี้)
+- **ข้อยกเว้น**: มีคันที่ **`Dest_Out` นานมาก** เพราะ **จอดในโรงงานลูกค้า ไม่มีคนขับ (ฝากรถ)** อาจเกิน 2 วัน — **ไม่คิดค่าพิเศษ**จากกฎเสียเวลา/ดีเวลล์ (ต้องมีวิธีทำเครื่องหมายใน config เช่น ช่วงวันที่ + ทะเบียน หรือเหตุผล `parked_at_customer`)
+- **ตัวอย่างจริง (ฝากรถลูกค้า)**: ทะเบียน **`71-8967`** จอดที่ **P&G** ช่วงประมาณ **`2026-04-20 14:00`** → **`2026-04-29 ~17:00`** (เอารถออกจาก P&G) — เที่ยวส่งก่อนจอด **นับลูกค้าปกติ**; ช่วงจอดในโรงงาน **ไม่เกี่ยวลูกค้า** (ไม่คิดค่าพิเศษจาก dwell) เมื่อใส่ **`parked_at_customer`** ใน config — รายละเอียดนิยามเต็มดู Session #91
+- **กฎ 2 เที่ยว / 24 ชม. (ยืนยัน)**: ถ้าในรอบ 24 ชม. (จาก `Origin_In` ครั้งแรกของวันตามที่ล็อกไว้) มี **matched ครบ 2 เที่ยว** → **ไม่เก็บ 50% ค่าเสียเวลา** เพราะถือว่าวิ่งได้ตามที่ตกลง **2 เที่ยวต่อวัน**
 
 ### Action ถัดไป
-- เปิด **`https://yk-logistics.github.io/transport-rate-calculator/`** (หรือ Pages URL ปัจจุบัน) รีเฟรช hard (Ctrl+F5) ตรวจหน้าเครื่องคิดเรท
-- ถ้าต้องการนำงานเดิมจาก stash กลับมา: **`git stash pop`** แล้วแก้ conflict ถ้ามี
+- ร่างสเปก JSON (no-work days, parked exception, unmatched wait flags) แล้วค่อย prompt Claude Code implement
 
 ---
 
-## 2026-05-01 (Session Summary #91 - Oatside: กู้ UI ลูกค้า + Excel แยกไฟล์หลัง deploy calculator)
+## 2026-05-02 (Session Summary #91 - นโยบายถามก่อนลงมือ + ยืนยันเคส 71-8967)
 
 ### บริบทจากผู้ใช้
-- ไปกด deploy ของ Transport calculator แล้วรู้สึกว่า **ไฟล์/หน้าตา Oatside หาย** — ไม่แน่ใจว่า commit ล่าสุดเป็นของเมื่อไหร่ ต้องการ **กู้** หรือ **เขียนใหม่ตามที่คุยกัน**
+- ขอให้ agent **ทุกแชท**: ถ้าสั่งให้ทำอะไรแล้วยังไม่เคลียร์จุดไหน → **ถามก่อนลงมือ** ทุกครั้ง
+- ตอบชุดคำถามยืนยันเรื่อง P&G / เวลาไทย / ยกเว้น dwell
 
 ### การตัดสินใจรอบนี้
-- **Git ไม่มีเวอร์ชันที่เคย commit ไว้สำหรับชุด UI ล่าสุด** (hero + ลิงก์ Excel ขวาหัว section + `exports/*.xlsx`) — ฟีเจอร์เดิมอยู่ในสคริปต์ patch ใน `ProjectYK_System/tools/` แต่ baseline `build_oatside_reports.py` เปลี่ยนจากที่ patch คาดไว้
-- **ทำแบบกู้โค้ดจริง**: รันลำดับ patch บนไฟล์ปัจจุบัน — แก้สคริปต์ให้ตรง baseline (trips ไม่มีคอลัมน์ขากลับ, `write_excel` ไม่ส่ง `pday_rows/cpd_rows`, สร้าง `_idx_segment_raw.txt` ใหม่จากไฟล์จริง)
-- **`deploy.ps1`** ของ calculator แค่ copy `transport_rate_calculator.html` → `index.html` ที่ราก repo — **ไม่ใช่สาเหตุโดยตรง** ที่ลบ `Oatside/build_oatside_reports.py`; แต่การ sync/reset/stash อาจทำให้สับสนกับของเก่า
-
-### สิ่งที่ทำแล้ว
-- อัปเดต **`regenerate_oatside_idx_segment_raw.py`** + regenerate **`_idx_segment_raw.txt`**
-- แก้ **`apply_oatside_ui_trips_filter_index_fold.py`** ให้ตรงหน้า `trips.html` ปัจจุบัน (15 คอลัมน์)
-- แก้ **`patch_oatside_excel_exports.py`** (`main` block) แล้วรันลำดับ: **UI fold/filter → Excel split+beautify → hero+xlsx inline → flex Audit**
-- **`python -m py_compile Oatside/build_oatside_reports.py`** ผ่าน
+- เพิ่มกฎใน **`.cursor/rules/oa-careful-default.mdc`** (ข้อ 0) + **`.cursor/rules/project-yk-context.mdc`** (§1b) + **`AGENTS.md`** — บังคับถามก่อนลงมือเมื่อกำกวม
+- **71-8967 @ P&G `2026-04-20 ~14:00` → `2026-04-29 ~17:00` (เวลาไทย)** — โอระบุ: **หลัง `Dest_Out` อาจไม่ได้วิ่งกลับทันที**; ถ้ามีวิ่งต่อให้นับ **ตีเปล่าไปตามปกติ**; ช่วงฝากรถนี้ **ยกเลิกทั้งหมด** (ไม่คิดค่าพิเศษจาก dwell / ไม่เตือน 50% อัตโนมัติจาก GPS หลุด–Unmatched ในช่วง) — **เฉพาะคันนี้ช่วงนี้**; **ไม่มีเคสฝากจอดอื่น** ตอนนี้
+- **ยืนยัน “ยกเลิกทั้งหมด” (แก้ความหมาย)**: **เที่ยวรอบก่อน (ส่งเข้า P&G แล้วจบงานปกติ)** → **ตัดจบ / นับลูกค้าปกติ**; **ช่วงหลังจากนั้นที่จอดในโรงงาน** → **ไม่เกี่ยวกับลูกค้า** (ไม่คิด dwell / ไม่เตือน 50% จากช่วงจอด / ไม่นับกิจกรรมในช่วงจอดเป็นของลูกค้า) — **ไม่ใช่**การตัดทิ้งเที่ยว matched ที่จบรอบส่งแล้วออกจาก Customer summary
 
 ### Action ถัดไป
-- โอรัน **`python Oatside/build_oatside_reports.py`** เมื่อมีไฟล์ GPS/input ครบ — ตรวจ **`TransportRateCalculator/reports/oatside-apr2026/`** มีโฟลเดอร์ **`exports/`** และหน้า **`index.html` / `trips.html`** ตามดีไซน์
-- ถ้ายังอยาก **กู้สถานะ git**: ดู **`git reflog`** / **`git stash list`** — แต่ชุด UI นี้ถูกสร้างใหม่ใน repo แล้วโดยไม่ต้องพึ่ง commit เก่า
+- ~~ใส่ช่วงนี้ใน JSON~~ → ใช้ **`customer_idle_windows`** ใน `oatside_config.json` (implement แล้ว Session #92)
 
 ---
 
-## 2026-05-01 (Session Summary #92 - เขียนเงื่อนไขรายงาน Oatside ลูกค้าเป็นเอกสารมาตรฐาน)
+## 2026-05-02 (Session Summary #92 - Oatside build: customer_idle clip + origin 24h fifty flag)
 
 ### บริบทจากผู้ใช้
-- ขอให้ **เขียนใหม่ตามเงื่อนไขที่คุยกัน** — เพื่อเก็บเป็นข้อตกลงถาวร
+- สั่ง **เริ่มลงมือ** implement ตามที่คุย (ฝากรถไม่เกี่ยวลูกค้า + กรอบ 24 ชม. จาก Origin_In)
 
 ### การตัดสินใจรอบนี้
-- เพิ่ม **`docs/OATSIDE_CUSTOMER_REPORT_SPEC.md`** — สรุป pipeline Excel/HTML, hero/index, หัว section + `exports/`, หน้า trips + filter + Trip Detail, Audit `(คลิกเพื่อขยาย)` + CSS ชิดขวา, และ checklist หลัง build
-
-### สิ่งที่ทำแล้ว
-- ตรวจโค้ดปัจจุบันมี marker หลักครบ (hero, `_xlsx_dl`, ไม่เรียก `html_export_downloads_block` ใน index, flex Audit, `tripsAllTable`)
-- เพิ่มเอกสารสเปก + อัปเดต **`CHANGELOG_MASTER.md`** (บรรทัดสรุป)
+- **`Oatside/build_oatside_reports.py`**: `CustomerIdleWindow` + `customer_idle_windows` + `customer_idle_clip_dest_wait_h()` — ตัดชม.ทับ `(Dest_In, Dest_Out)` กับช่วง config; **`daily_time_rows(..., cfg)`** ใช้ dest wait / cycle ที่ปรับแล้ว + **ตัด `Unmatched` Destination** ที่ทับช่วงเดียวกัน; **`Trip_Detail`** เพิ่ม `Dest_Wait_customer_h`, `Customer_idle_clip_h`, `Total_Cycle_customer_h`
+- **`use_origin_24h_fifty`**: `false` = กฎเดิม (50% ตามวัน `Dest_In`); `true` = **`one_trip_fifty_pct_details_origin24h`** (หน้าต่าง 24 ชม. rolling จาก `Origin_In`; 2 เที่ยวในหน้าต้องไม่เก็บ 50%); ชีต/HTML surcharge เพิ่ม `Window_Origin_In` / `Window_End`
+- **ค่าเริ่มต้น**: ช่วง **71-8967** ใน `_DEFAULT_CONFIG_JSON` + merge เมื่อไฟล์ config **ไม่มีคีย์** `customer_idle_windows` + `_DEFAULT_CONFIG` dataclass
+- **เอกสาร**: `OATSIDE_TRIP_PAIRING_MERGE_HANDOFF.md` — อธิบายคีย์ใหม่
+- **สคริปต์ patch ชั่วคราว**: `ProjectYK_System/tools/patch_oatside_*.py` (รันครั้งเดียวแล้ว — เก็บเป็นอ้างอิงได้)
 
 ### Action ถัดไป
-- เวลาปรับ UI รอบถัดไปให้แก้ **เอกสารสเปก + โค้ด** คู่กัน — กันหลงแบบ “deploy แล้วหาย”
+- ~~โอตั้ง **`use_origin_24h_fifty": true`**~~ → default โค้ด + merge `oatside_config.json` แล้ว (Session #93)
+- ~~ต่อยอด: วันไม่มีงานลูกค้า / …~~ → ชีต `NoWork_Outbound_50pct` / `Phantom_Trip_Candidates` / `Hints_DoubleOrigin` + บรรทัด D ใน `Customer_Summary` (Session #93)
+- ~~**ตรวจซ้ำ** fifty + no-work~~ → โอยืนยัน **เก็บคู่** (บันทึก Session #93 + แถว Info ใน Excel)
 
 ---
 
-## 2026-05-04 (Session Summary #93 - Deploy ปลอดภัย + กู้ stash Oatside)
+## 2026-05-01 (Session Summary #93 - Oatside wave3: default origin24h fifty + no-work recovery + phantom/hints)
 
 ### บริบทจากผู้ใช้
-- ขอให้ทำขั้นตอนป้องกัน + **ลองกู้** งานหลังรู้สึกเสียใจที่กด deploy เอง
+- ถามว่า **`use_origin_24h_fifty` default true บนเครื่องหรือคง false จนเทียบ Excel** และผลคืออะไร
+- ยืนยันตรวจ Excel **71-8967** ชม.ลดตามฝากรถแล้ว
+- สั่ง **ลุยต่อ**: no-work / ตีเปล่า / 0 เที่ยว / แถวเตือน origin
 
 ### การตัดสินใจรอบนี้
-- **`deploy.ps1` / `deploy_oatside_report.ps1`**: ค่าเริ่มต้น = **commit ในที่เดิมเท่านั้น** — ต้องใส่ **`-Push`** จึงจะ `push` (one-click `.bat` ส่ง **`-Push`** ให้ — พฤติกรรม “กดเดียวขึ้นเว็บ” ยังมี)
-- เพิ่ม **`deploy_one_click_local.bat`**, **`preflight_deploy.ps1`**, **`docs/DEPLOY_SAFETY_TH.md`**
-- **`git stash apply stash@{0}`** งาน WIP ก่อน recover (Oatside + เอกสาร) ลง working tree สำเร็จ ไม่ conflict
+- **`use_origin_24h_fifty` default `true`** ใน `_DEFAULT_CONFIG` + `_DEFAULT_CONFIG_JSON` + merge **`Oatside/oatside_config.json`** เมื่อยังไม่มีคีย์
+- **`customer_no_work`** (JSON) + **`outbound_half_dest_dates`** (ถ้าไม่ระบุ = วันถัดจากจบแต่ละช่วง no-work) → บรรทัด **D** ใน `Customer_Summary` + รวม **ยอดรวมลูกค้า**; คอลัมน์ **`Nw_outbound50_baht`** ใน `Trip_Detail` เฉพาะเที่ยวแรกของ `(ทะเบียน, Dest_In)` ในวัน recovery
+- **`grand_extra` (HTML)** = min trips + fifty + no-work เพื่อให้การ์ด «รวมส่วนเพิ่ม» สอดคล้อง `customer_grand`
+- ชีต **`Phantom_Trip_Candidates`**: วันที่มี Origin legs แต่ไม่มี matched trip ตาม `trip_date` (แนะนำเต็ม 1 เที่ยว — **ยังไม่บวกเข้า grand**)
+- ชีต **`Hints_DoubleOrigin`**: วันที่มี UM Origin ≥2 รอบ
+- แก้ **NameError**: ย้าย `_DEFAULT_NO_WORK_RANGES` / `_DEFAULT_OUTBOUND_HALF_DATES` ไว้ **ก่อน** `_DEFAULT_CONFIG`
+- สคริปต์ patch: `ProjectYK_System/tools/apply_oatside_wave3_no_work.py`, `apply_oatside_wave3_fix_grand.py`, `apply_oatside_wave3_move_defaults.py`
 
 ### สิ่งที่ทำแล้ว
-- อัปเดตสคริปต์ + เอกสาร + CONTEXT นี้
+- รัน `python Oatside/build_oatside_reports.py` ผ่าน (ตัวอย่างล่าสุด: **105 trips / 15 unmatched**)
+
+### การตัดสินใจเพิ่ม (โอ — เก็บคู่)
+- วัน **recovery** เที่ยวแรก: ถ้าเข้าเงื่อนไขทั้ง **surcharge fifty (ดาวน์ไทม์)** และ **No-work outbound 50%** → **เก็บคู่** (บวกทั้งคู่ ไม่กันซ้ำ) — แถว **`Policy_recovery_plus_fifty`** ในชีต **Info** ของ Excel
 
 ### Action ถัดไป
-- ตรวจ diff Oatside/เอกสาร แล้ว **commit** หรือแก้ต่อก่อน push
-- ลบ stash ซ้ำด้วย `git stash drop` หลังมั่นใจ (ระวัง drop ผิดก้อน)
+- โอเทียบยอดกับ Excel ชุดเดิมหลังเปิด default origin24h + บรรทัด D
 
 ---
 
-## 2026-05-04 (Session Summary #94 - กู้ชุดอื่น: stash เก่ากว่า + wave3)
+## 2026-05-02 (Session Summary #94 - Oatside: นิยาม «วันงาน» ตาม Origin + กะข้ามคืน — ตัวอย่าง 71-8002)
 
 ### บริบทจากผู้ใช้
-- บอกว่าเวอร์ชันที่ apply จาก stash ล่าสุด **ยังไม่ใช่ล่าสุดก่อนถูกลบ** — ขอลองกู้ “ตัวอื่น”
+- ตัวอย่างตาราง 5 แถว (Origin In/Out, Dest In/Out): โอมองเป็น **วันงานตามวันที่เข้าต้นทาง (Origin In)** โดยเที่ยวข้ามคืน (Dest วันรุ่งขึ้น) **ยังนับเป็นวันงานวันเดิมที่เริ่ม Origin**
+- **แถว 1–2** = งาน **วันที่ 9/4** ได้ **2 เที่ยว** (ต่อเนื่องจบกลางคืนข้ามวัน)
+- **แถว 3–4** = งาน **วันที่ 10/4** ได้ **2 เที่ยว**
+- **แถว 5** = งาน **วันที่ 11/4** ได้ **1 เที่ยว** → ต้องได้ **+50% อีก 1 เที่ยว** (ค่าเสียเวลา/ดาวน์ไทม์ตามที่ตกลง)
+- **วันที่ 12/4** — **ไม่มี Origin In** ในวันนั้น → **ไม่นับ** เป็นวันงานแยก (เป็นแค่ปลาย Dest ของเที่ยวที่เริ่ม 11/4)
+
+### การตัดสินใจรอบนี้ (บันทึกเป็นสเปกธุรกิจ — ยังไม่บังคับว่าโค้ด implement ครบ)
+- **ต่างจาก** aggregation หลายจุดในรายงานปัจจุบันที่อิง **`Dest_In` วันที่** (`dest_date`) หรือ fifty แบบ **หน้าต่าง 24 ชม. rolling จาก `Origin_In`** (`use_origin_24h_fifty`) ซึ่งอาจ **ไม่ให้ +50%** ทั้งที่โอมองว่าวันงาน 11/4 มี 1 เที่ยว
+- **ทิศทาง implement ที่สอดคล้องโอ**: นับเที่ยว + กฎ «1 เที่ยว/วันงาน → +50%» แยกตาม **คีย์วันงาน = วันที่ของ `Origin_In` (ต้นทาง)** หรือฟิลด์ `origin_date`/`trip_date` ที่นิยามเดียวกัน — และ **ไม่เปิดวันใหม่จากแค่ Dest วันรุ่งขึ้นโดยไม่มี Origin วันนั้น**
+
+### Action ถัดไป (ให้ dev / Claude Code)
+- เทียบสเปกนี้กับ `plate_dest_day_rows` / `one_trip_fifty_pct_details*` / หน้า HTML สรุปรายวัน — เพิ่มโหมดหรือคอลัมน์ «**วันงาน (Origin วัน)**» คู่ขนานกับ «วัน Dest_In» ถ้าต้องการไม่ทำลายของเดิม
+
+---
+
+## 2026-05-02 (Session Summary #95 - Oatside: ปลายทางรอข้ามคืน + deploy.ps1 syntax)
+
+### บริบทจากผู้ใช้
+- **Deploy** `deploy_oatside_report.ps1` error PowerShell (string terminator / try ไม่ปิด) หลังรัน one-click
+- **71-6802**: เที่ยวรอปลายทาง **~20 ชม. ข้ามคืน** (Dest_In 21/4 → Dest_Out 22/4) — โมเดล **วันงาน = Origin_In** ทำให้ **21/4 ไม่มี Origin** เลย **ไม่ขึ้น fifty** แม้ควรเก็บค่าเสียเวลาวันนั้น
 
 ### การตัดสินใจรอบนี้
-- **`stash@{1}`** (`WIP before calculator index deploy`) มี **`Oatside/build_oatside_reports.py`** blob **`a7aad9dc…`** ต่างจาก **`stash@{0}` / `HEAD` หลัง apply** (`0497fd58…`) — น่าจะเป็นงานค้างชุดก่อน stash รอบแรก
-- สร้าง worktree **`Project YK_recover_stash1`**: base **`6ea72f6`** + `git checkout stash@{1} --` ครบ path ที่ stash บันทึก (รายงาน `oatside-apr2026` + xlsx + เอกสาร)
-- เพิ่ม worktree **`Project YK_recover_80032a7`**: commit **`80032a7`** (Oatside wave3) สำหรับเทียบอีกแนว
+- **`deploy_oatside_report.ps1`**: เอา **here-string ใน `throw`** ออก ใช้สตริงบรรทัดเดียว + ASCII hyphen — ลดโอกาส parser พัง
+- **`build_oatside_reports.py`**: config **`long_dest_wait_midnight_fifty`** (default true) + **`long_dest_wait_midnight_min_h`** (default 12) — ฟังก์ชัน **`supplement_long_dest_wait_midnight_fifty`**: ถ้า `d_in.date() < d_out.date()` และ `dest_wait_h >= min_h` และยัง **ไม่มี** fifty สำหรับ `(plate, dest_date)` → เพิ่มแถว surcharge (โอ: **เต็ม 1 เที่ยว** = เรทวัน `Dest_In`) — สลับกลับเป็น +50% ได้ด้วย **`long_dest_wait_midnight_full_trip`: false** — รันหลัง fifty หลักแล้วค่อย `audit_rows` ใหม่
+- **HTML**: **`highlight_origin_wait_h` / `highlight_dest_wait_h`** (default 8 ชม.) + class **`wait-hi` / `wait-hi-dest`** + แถบอธิบายสีด้านบนรายงาน — ให้โอไฮไลต์รอต้นทาง/ปลายทางนานเพื่อพิจารณาเก็บลูกค้า
+- สคริปต์: `ProjectYK_System/tools/patch_oatside_midnight_dwell_fifty.py`, `fix_json_true_oatside.py`
+
+---
+
+## 2026-05-03 (Session Summary #96 - Oatside: พิมพ์เขียว backend schema สำหรับ Claude บนเว็บ)
+
+### บริบทจากผู้ใช้
+- ต้องการ workflow เดียวกับตัวอย่าง (สรุป schema แทนการโยนทั้งโปรเจกต์) แต่ **ขอเฉพาะ Oatside** ไม่เอาทั้ง Project YK
+
+### การตัดสินใจรอบนี้
+- สร้าง **`ProjectYK_System/TransportRateCalculator/docs/OATSIDE_BACKEND_SCHEMA.md`** — สรุป `Leg`/`Trip`, pipeline ฟังก์ชัน, billing, ชีต Excel, หน้า HTML, env, overrides JSON, prompt ตัวอย่างสำหรับ Artifacts
+- โฟลเดอร์ `Oatside/` ถูก `.cursorignore` — อ้างอิงจาก handoff + CHANGELOG/NEXT_ACTION ที่อ่านได้ใน repo
+
+### สิ่งที่ทำแล้ว
+- ไฟล์ schema พร้อมให้ลากไปแชท Claude.ai
 
 ### Action ถัดไป
-- โอเปิดเทียบ **`Project YK_recover_stash1`** กับ **`Project YK`** — ถ้า stash1 ถูกใจ ค่อย copy ไฟล์เข้าโฟลเดอร์หลักแล้ว commit
+- โอลองลาก `OATSIDE_BACKEND_SCHEMA.md` + สั่งตาม §9 ในไฟล์ — ได้ mock UI แล้วคัดลอกกลับมาให้ Cursor/Claude Code เชื่อมจริง
+
+---
+
+## 2026-05-01 (Session Summary #97 - Oatside HTML: ป้าย +100% ข้ามคืน + แยก ตีเปล่า / ค่าเสียเวลา)
+
+### บริบทจากผู้ใช้
+- วันไม่มีงาน / เคสข้ามคืนที่เก็บเต็ม 1 เที่ยว: บน HTML ยังขึ้น **+50%** ทั้งที่ยอดเงินถูกแล้ว — ต้องให้ป้ายสอดคล้อง (เช่น **+100%** เมื่อเต็มเรท)
+- เน้นดู **HTML** เป็นหลัก
+- แยกชัดระหว่าง **ตีเปล่า +50%** กับ **ค่าเสียเวลา +50%** ไม่ให้เข้าใจผสม
+
+### การตัดสินใจรอบนี้
+- เพิ่มฟิลด์ **`fifty_kind`** บนแถว surcharge: `blank_run` (origin-day 1 เที่ยว), `origin24h`, `downtime_dest` (dest-day / กฎเดิม), `midnight_full` / `midnight_pct` (ข้ามคืนปลายทาง)
+- ฟังก์ชัน **`html_fifty_surcharge_badge`**: ป้ายสีคนละ class (`fulltrip` / `blankrun` / `dwell` / `abn`) + ข้อความ **ตีเปล่า +X%** / **ค่าเสียเวลา +X%** / **+100%** ตาม kind หรือ fallback `amt >= trip_rate`
+- **`plate_dest_day_rows`**: `fifty_badge_html` → ตาราง (2) บน `index.html` และหน้า plate ใช้ badge เดียวกัน
+- การ์ดสรุป (C) + หัวคอลัมน์: เปลี่ยนจากเลข **+50%** ตายตัวเป็นคำว่า **ชาร์จเสริม / ส่วนเพิ่ม** ให้สอดคล้องหลายประเภท
+- ชีต Excel **`Surcharge_50pct_1Trip`**: เพิ่มคอลัมน์ **`Fifty_kind`**
+- สคริปต์: `ProjectYK_System/tools/apply_oatside_fifty_patch.py`, `patch_oatside_audit_sub.py`
+
+### สิ่งที่ทำแล้ว
+- `python -m py_compile Oatside/build_oatside_reports.py` ผ่าน; รัน `python Oatside/build_oatside_reports.py` ตัวอย่างผ่าน
+
+### Action ถัดไป
+- โอเปิด `index.html` / `plates/*.html` รอบล่าสุด ตรวจป้ายสี +คำว่า ตีเปล่า / ค่าเสียเวลา / +100% ว่าตรงความหมายงานจริง
+
+---
+
+## 2026-05-01 (Session Summary #98 - Oatside HTML: แก้ค่า default ไม่ให้ทุกแถวเป็น «ตีเปล่า»)
+
+### บริบทจากผู้ใช้
+- หลัง Session #97 ป้ายกลายเป็น **ตีเปล่าหมด** — ต้องการแยก **ตีเปล่า** กับ **ค่าเสียเวลา** ชัดเจน
+- **ค่าเสียเวลา** ต้องครอบทั้ง **+50%** และ **+100%**
+
+### การตัดสินใจรอบนี้
+- แถวจาก **`one_trip_fifty_pct_origin_day`** (วันงาน Origin มี 1 เที่ยว → charge 50% ของเรท): default **`fifty_kind` = `downtime_origin_day`** → ป้าย **ค่าเสียเวลา +50%**
+- **`blank_run` (ตีเปล่า +50%)** เฉพาะเมื่อ override **`action == "blank_run"`** หรือ **`note` มีคำว่า «ตีเปล่า»** (ไม่สนตัวพิมพ์)
+- **`html_fifty_surcharge_badge`**: `midnight_full` / fallback เต็มเรท → **ค่าเสียเวลา +100%**; `midnight_pct` / dest / origin24h / origin-day downtime → **ค่าเสียเวลา +{pct}%**; ลำดับเช็ค `blank_run` ก่อนกรณีชน logic
+- สคริปต์: `ProjectYK_System/tools/patch_oatside_fifty_kind_v2.py`
+
+### สิ่งที่ทำแล้ว
+- `py_compile` + รัน `build_oatside_reports.py` ตัวอย่าง: `index.html` มี **ค่าเสียเวลา** เป็นส่วนใหญ่ และ **ตีเปล่า** เฉพาะที่ mark
+
+### Action ถัดไป
+- โอถ้าต้องการ mark ตีเปล่าเป็นรายวัน: ใส่ใน **`oatside_billing_overrides.json`** ว่า `blank_run` หรือ note มีคำว่า **ตีเปล่า**
+
+---
+
+## 2026-05-01 (Session Summary #99 - Oatside HTML: หลายป้ายต่อเซลล์ + ตีเปล่า จาก No-work recovery)
+
+### บริบทจากผู้ใช้
+- ไม่เห็นค่า **ตีเปล่า** บนรายงาน HTML
+- ถ้าวันไหนมีหลายประเภท charge ให้ **ต่อหลายป้าย** ในคอลัมน์เดียวกันได้
+
+### การตัดสินใจรอบนี้
+- **`plate_dest_day_rows`**: รวมทุกแถว **`fifty_rows`** ที่คีย์ `(ทะเบียน, dest_date)` เป็นหลายป้าย (เว้นวรรค); รวมยอด **`fifty_pct_baht`** + **`customer_day_baht`** ให้รวมทุก surcharge ของวันนั้น
+- **No-work outbound recovery** (`no_work_outbound_rows`) แสดงในคอลัมน์เดียวกันเป็นป้าย **`ตีเปล่า +50%`** (`fifty_kind` = `no_work_outbound`) ต่อท้ายรายการ fifty ของวันนั้น
+- **`main`**: คำนวณ **`nw_rows`** ก่อน **`pday_rows`** เพื่อส่งเข้า `plate_dest_day_rows(..., nw_rows=...)`
+- **`write_excel`**: `pday` ใช้ `nw_rows=no_work_rows` เช่นกัน
+- หน้า **รายทะเบียน**: `fifty_origin_lists` / `fifty_by_lists` แทน dict แถวเดียว — หลายป้ายต่อวันได้
+- CSS: เว้นระยะป้าย **`.badge`** ด้วย `margin`
+- สคริปต์: `ProjectYK_System/tools/patch_oatside_multi_badge_nw.py`
+
+### สิ่งที่ทำแล้ว
+- `py_compile` + build ตัวอย่าง: `index.html` มี **หลายป้ายในเซลล์เดียว** และมี **ตีเปล่า** จาก No-work
+
+### Action ถัดไป
+- โอเปิดตาราง (2) วันที่มีทั้ง fifty กับ recovery ว่าลำดับป้ายอ่านเข้าใจหรืออยากสลับลำดับ
+
+---
+
+## 2026-05-01 (Session Summary #100 - Oatside trips: คอลัมน์ราคา + No-work recovery วันข้ามคืน)
+
+### บริบทจากผู้ใช้
+- ต้องการรวมคอลัมน์ราคาใน 	rips.html / ตารางรายเที่ยว: ค่าขนส่ง, เสียเวลา +50%/+100%, ตีเปล่า +50%
+- ทะเบียน 71-6802 วันที่ 29/4 วิ่งงานแต่ไม่ขึ้นค่าตีเปล่า (No-work recovery) — จริง ๆ ควรมี
+
+### การตัดสินใจรอบนี้
+- **สาเหตุ**: เดิม No-work ยึด (plate, dest_date) เท่ากับวัน recovery และเที่ยวแรกของวันนั้น — รถข้ามคืน (Origin 29/4, Dest_In 30/4) ทำให้ dest_date != R จึงไม่ถูกเลือก
+- **แก้**: irst_no_work_trip_by_plate_recovery_day — วัน R ใน outbound_half_dest_dates เลือกเที่ยวแรกที่ dest_date==R ถ้าไม่มี ให้ใช้ origin_date==R และ dest_date>R (เรียง o_in)
+- 	rip_no_work_outbound_baht / 
+o_work_outbound_rows ใช้เรทตาม **วัน anchor R** ไม่ใช่แค่ 	.dest_date in recovery set
+- plate_dest_day_rows: เพิ่มแถวสังเคราะห์ (plate, R) เมื่อมี No-work แต่ไม่มี matched Dest_In วัน R
+- HTML: 	rip_row_pricing_cells แยกยอด fifty เป็น +50 / +100 (ตาม ifty_kind) บนเที่ยวแรกของ (plate, dest_date); คอลัมน์ 4 ช่อง; แถว unmatched เติม — ให้ครบคอลัมน์
+
+### สิ่งที่ทำแล้ว
+- แก้ Oatside/build_oatside_reports.py (รวมถึง Trip_Detail Excel ใช้ irst_no_work)
+- py_compile + รัน uild_oatside_reports.py สำเร็จ — ตัวอย่างแถว 71-6802 แสดงตีเปล่า 3,750 บาท
+
+### Action ถัดไป
+- โอเปิด TransportRateCalculator/reports/oatside-apr2026/trips.html และ plates/71-6802.html ตรวจ layout คอลัมน์ใหม่
+- ถ้ามีรถ recovery อื่นที่ pattern ซับซ้อนกว่า overnight ให้แจ้งตัวอย่างวันที่/ทะเบียน
+
+---
+
+## 2026-05-01 (Session Summary #101 - Oatside: ค่าเสียเวลา 7,500 + dedupe origin24h + sticky หัวตาราง)
+
+### บริบทจากผู้ใช้
+- ถามว่าทำไมค่าเสียเวลา 7,500 (ตารางแสดงค่าขนส่ง 7,500 กับคอลัมน์เสียเวลา+50% 7,500; Dest Wait ไฮไลต์ส้ม ~8 ชม.)
+- ต้องการหัวตารางเลื่อนตามแบบ freeze แถว (เหมือน Excel)
+
+### การตัดสินใจรอบนี้
+- คอลัมน์ **เสียเวลา+50%/+100%** แสดงยอดรวม surcharge ตามกฎ fifty ของ `(ทะเบียน, วัน Dest_In)` ที่แถวแรกของวันนั้น — **ไม่ได้คิดจากชั่วโมง Dest Wait โดยตรง**; สีส้ม = แค่เตือนรอปลายทางเกินเกณฑ์
+- กรณี 7,500 เท่ากับเรทเต็มมักเกิดจาก **สองครั้ง +50% ของเรท** (3,750+3,750): โหมด `use_origin_24h_fifty` เดิมอนุญาตหลายหน้าต่าง 24 ชม. ที่ละ 1 เที่ยวแต่ `dest_date` วันเดียวกัน
+- **แก้**: จำกัดอย่างมาก **หนึ่ง** charge `origin24h` ต่อ `(plate, dest_date)` ใน `one_trip_fifty_pct_details_origin24h`
+- **UI**: คลุมตารางเที่ยวด้วย `.table-scroll` + `thead th { position: sticky; top: 0 }` ใน `trips.html` และตารางรายเที่ยวใน `plates/*.html`
+
+### สิ่งที่ทำแล้ว
+- แก้ `Oatside/build_oatside_reports.py` + build ผ่าน
+
+### Action ถัดไป
+- รีเฟรช `trips.html` เลื่อนในกรอบตารางทดสอบหัวตารางติด; ถ้าธุรกิจต้องการเก็บ +50% มากกว่า 1 ครั้งต่อวัน Dest เดียวกันจริง ๆ ต้องนิยามกฎใหม่หรือใช้ override
+
+---
+
+## 2026-05-01 (Session Summary #102 - Oatside HTML: แบ่งกลุ่มแถวตามวัน)
+
+### บริบทจากผู้ใช้
+- ต้องการให้เห็นการแบ่งตามวัน (ไฮไลต์สีจางหรือวิธีที่ดูดี)
+
+### การตัดสินใจรอบนี้
+- ใส่ class `day-band-0` / `day-band-1` สลับตามปฏิทินด้วย `toordinal() % 2` — วันที่ติดกันสีสลับอัตโนมัติ
+- **Matched**: ยึดวันจาก **`Origin_In`** (`t.o_in.date()`) และ **เรียงลำดับแถว** ใน `trips.html` / ตารางรายเที่ยวต่อทะเบียนด้วย **`Origin_In`** (`t.o_in`) แทน `Dest_In`
+- **UM-O**: ใช้ `leg.t_in` (เป็น Origin อยู่แล้ว) · **UM-D**: แถวไม่มี Origin ในข้อมูล leg — ใช้ `leg.t_in` เป็นตัวแทน (เวลา Dest) ทั้งสีแถวและลำดับ
+- CSS พื้นหลัง `#fafcfe` / `#e9f1fa` + override ช่อง `wait-hi` / `wait-hi-dest` ให้ยังเด่น
+
+### สิ่งที่ทำแล้ว
+- `Oatside/build_oatside_reports.py`: `_tr_prepend_day_band` + `interleaved_matched_unmatched_rows_html` + CSS; build ผ่าน
+
+### Action ถัดไป
+- โอรีเฟรช `trips.html` / `plates/*.html` ดูโทนตามวันงาน Origin
+
+---
+
+## 2026-05-01 (Session Summary #103 - Oatside: เที่ยวพิเศษ P&G→Oatside ไม่มีใน GPS)
+
+### บริบทจากผู้ใช้
+- วันที่ **22/4/2026** ทะเบียน **72-1217** มีงาน **P&G → Oatside** ที่ลูกค้าตกลงเก็บเพิ่ม **1 เที่ยว 7,500 บาท** แต่ไม่ปรากฏในไฟล์ GPS — ต้องการให้รวมในยอดลูกค้า/สรุปเหมือนค่าเที่ยวฐาน
+
+### การตัดสินใจรอบนี้
+- เพิ่ม **`manual_extra_trips`** ใน `Oatside/oatside_config.json` (รายการ `{ dest_date, plate, amount_baht, note }`) — บวกเข้า **ฐานค่าเที่ยว (A)** และ **จำนวนเที่ยว matched** ต่อ `(ทะเบียน, วัน Dest_In)` ใน `Plate_DestDay` / `Audit_Log` / `Customer_Trips_Per_Day` และชีต **`Manual_Extra_Trips`** ใน Excel
+- แก้ `_DEFAULT_CONFIG_JSON` หลัง patch: ต้องมี **comma** หลัง `_note_manual_extra_trips` และ `_DEFAULT_CONFIG` ต้องมี **`manual_extra_trips=()`** ไม่เช่นนั้น `OatsideConfig` โหลดไม่ได้
+- สคริปต์ `ProjectYK_System/tools/patch_oatside_manual_extra_trips.py`: แก้เงื่อนไข anchor `return OatsideConfig` เป็นเช็ค `ret in s` (ไม่ใช่ `ins+ret in s`)
+
+### สิ่งที่ทำแล้ว
+- รัน patch + แก้ syntax/`_DEFAULT_CONFIG` + `python Oatside/build_oatside_reports.py` ผ่าน — ชีต **Info** มี `Manual_extra_trips_baht = 7500`; ตัวอย่างชุด GPS ล่าสุดวัน 22/4 คันนี้ matcher เหลือ **1 เที่ยว** จึงหลังรวม manual เป็น **2 เที่ยว / ฐาน 15,000 / รวมวัน 18,750** (รวม fifty เดิม 3,750)
+
+### Action ถัดไป
+- โอเปิด `Oatside/Oatside_PG_Trip_Summary_By_Site.xlsx` ดูชีต `Manual_Extra_Trips` และแถว **72-1217** วันที่ **2026-04-22** ใน `Plate_DestDay` / `Customer_Summary` (บรรทัด A2 ถ้ามี manual)
+- ถ้าเปลี่ยนชุดไฟล์ GPS แล้วจำนวนเที่ยวจริงวันนั้นไม่ตรงกับที่คาด ให้ยึดยอด **amount_baht** เป็นหลัก (หรือแก้ไข/ลบรายการใน `manual_extra_trips`)
+
+---
+
+## 2026-05-01 (Session Summary #104 - Oatside: ค่าขนส่งขากลับ manual_return_trips)
+
+### บริบทจากผู้ใช้
+- ต้องการเพิ่มอีก **แถวเงิน** แบบค่าเสียเวลา แต่เป็นค่าขนส่ง **งานขากลับ 7,500 บาท** แบบ **ไม่มีเงื่อนไข** (นาน ๆ มีที)
+
+### การตัดสินใจรอบนี้
+- เพิ่ม **`manual_return_trips`** ใน `oatside_config.json` (รูปแบบเดียวกับ `manual_extra_trips`) — **ไม่เพิ่ม** `matched_trips` / ฐานค่าเที่ยว GPS; บวกเข้า **`return_trip_baht`** + **`customer_day_baht`** + **รวมลูกค้า (grand)**; แสดงคอลัมน์ **ขากลับ(฿)** ใน `trips.html` / `plates/*.html` และตาราง (2) / Audit บน `index.html`
+- แสดงยอดขากลับที่ **แถวแรก**ของ `(ทะเบียน, วัน Dest_In)` เหมือนกฎคอลัมน์เสียเวลา; Excel: ชีต **`Manual_Return_Trips`**, คอลัมน์ **`Return_trip_baht`** / **`Return_manual_baht`**, Info **`Manual_return_trips_baht`**, Customer_Summary บรรทัด **R**
+- สคริปต์: `ProjectYK_System/tools/apply_oatside_manual_return_trips.py` (+แก้ `_DEFAULT_CONFIG` ให้มี `manual_extra_trips`/`manual_return_trips`)
+
+### สิ่งที่ทำแล้ว
+- ตั้ง `manual_return_trips` ตัวอย่าง **72-1217 / 2026-04-22 / 7,500** ใน `Oatside/oatside_config.json` — build ผ่าน; ตัวอย่าง `Plate_DestDay` วันนั้น: ฐาน 15,000 + fifty 3,750 + **ขากลับ 7,500** → **รวมวัน 26,250**; **Grand** +7,500 จากเดิม
+
+### Action ถัดไป
+- โอเปิด `trips.html` / `plates/72-1217.html` ดูคอลัมน์ **ขากลับ(฿)** และชีต **`Manual_Return_Trips`** ใน Excel — ถ้าไม่ใช้งานให้ลบรายการใน `manual_return_trips` แล้วรัน build ใหม่
+
+---
+
+## 2026-05-01 (Session Summary #105 - Oatside HTML: กรองทะเบียนหน้าเที่ยว + พับหัวข้อสรุป)
+
+### บริบทจากผู้ใช้
+- หน้า **เที่ยวทั้งหมด** อยากกรองตามทะเบียน/คันได้ง่าย
+- หน้า **สรุป (index)** อยากให้แต่ละหัวข้อซ่อน/ขยายได้ คลิกเหมือน **Audit log**
+
+### การตัดสินใจรอบนี้
+- **Trips**: แถว `<tr>` ใส่ `data-plate` (matched + UM); แถบ **กรองทะเบียน** (`#tripsPlateFilter` จากรายการ `plates`) + **ค้นหา** (`#tripsPlateQuery`); ตาราง `#tripsAllTable` + JS สั้น ๆ ใน `_TRIPS_FILTER_JS` ต่อท้าย HTML
+- **Index**: ห่อคำอธิบายสี, (1)(2)(3), และ **รายทะเบียน** ด้วย `<details class='section-fold'><summary class='section-sum'>`; แปลงหัว **Audit** จาก inline style เป็น class เดียวกัน
+
+### สิ่งที่ทำแล้ว
+- `ProjectYK_System/tools/apply_oatside_ui_trips_filter_index_fold.py` patch เข้า `Oatside/build_oatside_reports.py` — `python -m py_compile` + `python Oatside/build_oatside_reports.py` ผ่าน; ตรวจ `trips.html` มี `tripsPlateFilter` / `tripsAllTable` / `data-plate`, `index.html` มี `section-fold`
+
+### Action ถัดไป
+- โอเปิด `TransportRateCalculator/reports/oatside-apr2026/trips.html` ลองเลือกทะเบียน + พิมพ์ค้นหา; เปิด `index.html` คลิกหัวข้อแต่ละกล่องดูว่าพับ/ขยายถูกใจ
+
+---
+
+## 2026-05-04 (Session Summary #106 - Oatside: Excel export แยกต่อตาราง + จัดรูปแบบ)
+
+### บริบทจากผู้ใช้
+- ลูกค้าต้องการ **Export เป็น Excel แยกตามตาราง** และให้ **สวยงาม**
+
+### การตัดสินใจรอบนี้
+- **ไฟล์รวม** `Oatside_PG_Trip_Summary_By_Site.xlsx` — หลังเติมข้อมูลแล้วเรียก **`beautify_oatside_workbook`**: หัวแถวพื้นหลัง `#1E3A5F` ตัวอักษรขาว, เส้นขอบบาง, zebra แถวข้อมูล, AutoFilter, Freeze แถวหัว, คอลัมน์เงินรูปแบบ `#,##0`, ปรับความกว้างคอลัมน์ตามความยาวข้อความ (จำกัดสูงสุด)
+- **ไฟล์แยก** — โฟลเดอร์ **`TransportRateCalculator/reports/oatside-apr2026/exports/`** ชื่อ `01_…` ถึง `14_…` ตามชีตหลัก (CPD, Plate_DestDay, UM, Audit, Trip_Detail, สรุปลูกค้า, Daily, Surcharge, Manual*, NoWork, Phantom, Hints); แต่ละไฟล์มีแถวปก **แบรนด์ Y.K. + ชื่อตารางภาษาไทย + เวลาสร้าง** แล้วคัดลอกตารางเดิมพร้อมสไตล์เดียวกับไฟล์รวม
+- **`index.html`** — แถบ **ดาวน์โหลด Excel แยกตาราง** + ลิงก์ไฟล์รวม (relative ไป `Oatside/...xlsx`)
+
+### สิ่งที่ทำแล้ว
+- `ProjectYK_System/tools/patch_oatside_excel_exports.py` patch เข้า `Oatside/build_oatside_reports.py` — `py_compile` + build ผ่าน; ตรวจมีไฟล์ `exports/*.xlsx` 14 ไฟล์
+
+### Action ถัดไป
+- โอเปิด `index.html` ทดลองคลิกดาวน์โหลดแต่ละไฟล์ใน Excel — ถ้าต้องการเพิ่มชีต/เปลี่ยนชื่อไฟล์ แก้ที่ `OATSIDE_EXPORT_TABLES` ใน `build_oatside_reports.py`
+
+---
+
+## 2026-05-04 (Session Summary #107 - Oatside HTML: hero หน้าเที่ยว + Excel ขวาหัวตาราง + ตัดคำอธิบายสี)
+
+### บริบทจากผู้ใช้
+- ดาวน์โหลด Excel อยากอยู่ **ขวาหัวตารางของแต่ละหัวข้อ** ไม่เอาแยกเป็นหน้าต่างดาวน์โหลดอย่างเดียว
+- ตัด **คำอธิบายสี / ไฮไลต์ชั่วโมงรอ** ออก
+- **ดูเที่ยวทั้งหมด** อยากให้เป็นหลัก — ลูกค้าเน้นดูจากนั้น (เวลาเข้าออก + ราคา)
+
+### การตัดสินใจรอบนี้
+- ลบแถบ **`export-panel`** + ฟังก์ชัน `html_export_downloads_block` — ใช้ `_xlsx_dl()` สร้างลิงก์ใน `<summary class='section-sum section-sum-row'>` คู่กับ `<span class='sum-dl'>` ด้านขวา + `onclick='event.stopPropagation()'` กันคลิกดาวน์โหลดแล้วพับหัวข้อ
+- ลบ `<details>` คำอธิบายสีทั้งก้อน
+- **`index.html`**: เพิ่ม **hero** (แนะนำลูกค้า + ปุ่ม **เปิดเที่ยวทั้งหมด**) และ **`nav-secondary`** ลิงก์ Excel รวม
+- **`trips.html`**: หัว `h1` ใส่แท็ก **หน้าหลักลูกค้า** + บรรทัดนำ (`trips-lead`) + แถวหัวตาราง (`panel-title-row`) มีลิงก์ **Trip Detail** ไป `exports/05_Trip_Detail.xlsx`
+
+### สิ่งที่ทำแล้ว
+- `ProjectYK_System/tools/patch_oatside_hero_xlsx_inline.py` + build ผ่าน; ตรวจ `index.html` ไม่มี `export-panel` / ไม่มีหัวคำอธิบายสี; มี `hero-trips` และ `xlsx-dl` ใน summary
+- ต่อมา: `patch_oatside_summary_flex_audit.py` — `summary.section-sum-row` ใช้ `width:100%` + `margin-left:auto` ที่ `.sum-dl` ให้ปุ่มดาวน์โหลดชิดขวา; Audit ใส่ `(คลิกเพื่อขยาย)` หน้าสุดของหัวข้อ
+
+### Action ถัดไป
+- โอเปิด `trips.html` ลองคลิก **ดาวน์โหลด Excel** ขวาหัวตารางบนมือถือ/เดสก์ท็อป — ถ้าต้องการให้ลิงก์เปิดแท็บใหม่แทน `download` บอกได้

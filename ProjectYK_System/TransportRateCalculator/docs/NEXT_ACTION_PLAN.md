@@ -2,12 +2,6 @@
 
 แผนงานลำดับถัดไป (เรียงตามความสำคัญ)
 
-## ⭐ Quick Status (2026-05-04 | Deploy ปลอดภัย + กู้ stash Oatside)
-
-- [done] **`deploy.ps1` / `deploy_oatside_report.ps1`**: ค่าเริ่มต้น commit เท่านั้น — ต้อง **`-Push`** จึง push; one-click `.bat` ส่ง **`-Push`** ให้ · **`deploy_one_click_local.bat`**, **`preflight_deploy.ps1`**, **`docs/DEPLOY_SAFETY_TH.md`**
-- [done] นำงาน WIP จาก **stash** กลับมา (Oatside + เอกสาร) ด้วย `git stash apply` แล้ว **commit** `31c7b2a`
-- [next] ตรวจ `git stash list` — ลบก้อนซ้ำด้วย `git stash drop` เมื่อมั่นใจ; **push** `main` ขึ้น origin เมื่อพร้อม
-
 ## ⭐ Quick Status (2026-05-02 | One Platform — หน้า pitch สำหรับ Pages)
 
 - [done] **`reports/one-platform-status/`** บน **`yk-logistics/transport-rate-calculator`** — `index.html` + **`public-stats.json`** (สถิติรวมจริงจาก `app.db`) + `build_public_stats.py` + README — push แล้ว (ลิงก์ด้านล่าง CONTEXT_LOG)
@@ -15,7 +9,21 @@
 
 ## ⭐ Quick Status (2026-05-01 | Oatside — GitHub Org `yk-logistics`)
 
-- [done] **กู้ UI ลูกค้าใน `build_oatside_reports.py`**: hero + ลิงก์ Excel ขวาหัว section + โฟลเดอร์ **`exports/*.xlsx`** + **trips** filter — รันลำดับ patch ใน `ProjectYK_System/tools/` แล้ว `py_compile` ผ่าน (ต้องรัน builder เพื่อ regenerate HTML/Excel จริง)
+- [done] **`trips.html` + ตารางรายเที่ยวต่อทะเบียน**: คอลัมน์ **ค่าขนส่ง / เสียเวลา+50% / เสียเวลา+100% / ตีเปล่า+50%**; No-work recovery รองรับข้ามคืน (`first_no_work_trip_by_plate_recovery_day` + แถวสังเคราะห์ `plate_dest_day_rows`) — `Oatside/build_oatside_reports.py` (Session #100)
+- [done] **อธิบายคอลัมน์เงิน + dedupe `origin24h`** (สูงสุด 1 ครั้งต่อทะเบียน×วัน Dest_In) + **หัวตาราง sticky** ในกรอบเลื่อน — Session #101
+- [done] **แบ่งกลุ่มตามวันในตารางเที่ยว** — พื้นหลังสลับโทน `day-band-0`/`day-band-1` (matched ยึดวัน **Origin_In**; UM-D ใช้เวลา leg) + **เรียง matched ตาม Origin_In** — Session #102
+- [done] **`manual_extra_trips`** (เช่น 72-1217 22/4/2026 P&G→Oatside +7,500 ไม่มีใน GPS) — บวกฐาน/สรุปลูกค้า + ชีต `Manual_Extra_Trips` — Session #103
+- [done] **`manual_return_trips`** (ค่าขนส่งขากลับ flat +7,500 — ไม่เพิ่ม matched; คอลัมน์ **ขากลับ(฿)** + ชีต `Manual_Return_Trips`) — Session #104
+- [done] **`trips.html` กรอง/ค้นหาทะเบียน** + **`index.html` พับหัวข้อสรุป** (`section-fold`, Audit/รายทะเบียน style เดียวกัน) — `apply_oatside_ui_trips_filter_index_fold.py` — Session #105
+- [done] **Excel ลูกค้า**: ไฟล์แยกต่อตารางใน **`exports/*.xlsx`** + จัดรูปหัวตาราง/สีแถว + ลิงก์จาก **`index.html`** — `patch_oatside_excel_exports.py` — Session #106
+- [done] **UX ลูกค้า**: hero ชี้ `trips.html` + Excel ขวาหัวแต่ละ `<details>` + ตัดบล็อกคำอธิบายสี — `patch_oatside_hero_xlsx_inline.py` — Session #107
+- [done] **HTML Oatside — หลายป้าย/เซลล์ + ตีเปล่า (No-work recovery)**: รวม `nw_rows` ในคอลัมน์ส่วนเพิ่มตาราง (2); หน้า plate รองรับหลาย fifty ต่อวัน — `patch_oatside_multi_badge_nw.py`
+- [done] **HTML Oatside — ป้าย surcharge**: เคสข้ามคืนเต็มเรทแสดง **+100%**; แยก **ตีเปล่า** vs **ค่าเสียเวลา** (`fifty_kind` + `html_fifty_surcharge_badge`) — `build_oatside_reports.py` + tools `apply_oatside_fifty_patch.py` / `patch_oatside_audit_sub.py`
+- [done] **`OATSIDE_BACKEND_SCHEMA.md`** — พิมพ์เขียว schema + prompt ตัวอย่างสำหรับโยน **Claude บนเว็บ (Artifacts)** ออกแบบ Dashboard mock (`TransportRateCalculator/docs/OATSIDE_BACKEND_SCHEMA.md`)
+- [done] **`customer_idle_windows`** (default 71-8967 ฝากโรงงาน) + คอลัมน์ **`Trip_Detail`** แยก dest wait ฝั่งลูกค้า + flag **`use_origin_24h_fifty`** (rolling 24h จาก `Origin_In` สำหรับ +50%) — `build_oatside_reports.py` + `OATSIDE_TRIP_PAIRING_MERGE_HANDOFF.md`
+- [done] **default `use_origin_24h_fifty`: true** + **`customer_no_work` / recovery outbound 50%** (บรรทัด D + ชีต `NoWork_Outbound_50pct`) + **`Phantom_Trip_Candidates`** + **`Hints_DoubleOrigin`** + คอลัมน์ **`Nw_outbound50_baht`** — merge `oatside_config.json` แล้ว (Session #93)
+- [done] นโยบายวัน recovery + fifty: โอยืนยัน **เก็บคู่** (บวกทั้ง fifty ดาวน์ไทม์กับ No-work outbound 50% ได้) — แถว `Policy_recovery_plus_fifty` ในชีต Info ของรายงาน Excel
+- [next] โอเทียบยอดกับ Excel ชุดเดิมหลัง default origin24h + บรรทัด D
 - [done] **จำนวนเที่ยวต่อวัน (ลูกค้า)**: ชีต Excel **`Customer_Trips_Per_Day`** + ตารางบน **`index.html`** (matched ตามวัน `Dest_In` + จำนวนรถ) — `build_oatside_reports.py`
 - [done] **`match_plate` แบบปลายทางก่อน** (ต้นทางล่าสุดก่อน `Dest_In`) — ลด UM ผิดพลาด / ลดชน `demote_chronology_violations`; build ล่าสุด **105 / 15** + เอกสาร `OATSIDE_TRIP_PAIRING_MERGE_HANDOFF.md` §4
 - [done] **ปิดรวบ Origin ทั้งก้อน**: `enable_origin_chain_merge` default **false** + เอกสาร `OATSIDE_ORIGIN_CHAIN_MERGE_FIX.md` + build ชุด GPS **02.05.2026** (ตัวอย่าง `ProjectYK_System/tools/run_oatside_may02_build.py`)
