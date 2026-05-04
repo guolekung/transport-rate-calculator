@@ -2985,3 +2985,18 @@ Parser ใหม่:
 ### Action ถัดไป
 - ตรวจ diff Oatside/เอกสาร แล้ว **commit** หรือแก้ต่อก่อน push
 - ลบ stash ซ้ำด้วย `git stash drop` หลังมั่นใจ (ระวัง drop ผิดก้อน)
+
+---
+
+## 2026-05-04 (Session Summary #94 - กู้ชุดอื่น: stash เก่ากว่า + wave3)
+
+### บริบทจากผู้ใช้
+- บอกว่าเวอร์ชันที่ apply จาก stash ล่าสุด **ยังไม่ใช่ล่าสุดก่อนถูกลบ** — ขอลองกู้ “ตัวอื่น”
+
+### การตัดสินใจรอบนี้
+- **`stash@{1}`** (`WIP before calculator index deploy`) มี **`Oatside/build_oatside_reports.py`** blob **`a7aad9dc…`** ต่างจาก **`stash@{0}` / `HEAD` หลัง apply** (`0497fd58…`) — น่าจะเป็นงานค้างชุดก่อน stash รอบแรก
+- สร้าง worktree **`Project YK_recover_stash1`**: base **`6ea72f6`** + `git checkout stash@{1} --` ครบ path ที่ stash บันทึก (รายงาน `oatside-apr2026` + xlsx + เอกสาร)
+- เพิ่ม worktree **`Project YK_recover_80032a7`**: commit **`80032a7`** (Oatside wave3) สำหรับเทียบอีกแนว
+
+### Action ถัดไป
+- โอเปิดเทียบ **`Project YK_recover_stash1`** กับ **`Project YK`** — ถ้า stash1 ถูกใจ ค่อย copy ไฟล์เข้าโฟลเดอร์หลักแล้ว commit
