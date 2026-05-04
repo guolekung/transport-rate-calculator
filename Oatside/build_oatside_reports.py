@@ -48,6 +48,52 @@ class OatsideConfig:
     max_origin_chain_gap_h: float
     enable_origin_chain_merge: bool
     charge_min_trip_shortfall: bool
+    use_origin_24h_fifty: bool
+    use_origin_day_fifty: bool
+    customer_idle_windows: list[CustomerIdleWindow]
+    customer_no_work_ranges: list[tuple[date, date, str]]
+    outbound_half_dest_dates: frozenset[date]
+    long_dest_wait_midnight_fifty: bool
+    long_dest_wait_midnight_min_h: float
+    long_dest_wait_midnight_full_trip: bool
+    highlight_origin_wait_h: float
+    highlight_dest_wait_h: float
+
+@dataclass
+class CustomerIdleWindow:
+    """Hours at customer site excluded from customer dwell / 24h gap (e.g. factory parking)."""
+
+    plate: str
+    start: datetime
+    end: datetime
+    note: str = ""
+
+    def overlaps_dest_interval(self, d_in: datetime, d_out: datetime) -> bool:
+        return d_in < self.end and d_out > self.start
+
+    def overlap_hours(self, d_in: datetime, d_out: datetime) -> float:
+        a = max(d_in, self.start)
+        b = min(d_out, self.end)
+        if b <= a:
+            return 0.0
+        return (b - a).total_seconds() / 3600.0
+
+
+
+_DEFAULT_NO_WORK_RANGES: list[tuple[date, date, str]] = [
+    (date(2026, 4, 23), date(2026, 4, 24), "customer no-work"),
+    (date(2026, 4, 27), date(2026, 4, 28), "customer no-work"),
+    (date(2026, 5, 1), date(2026, 5, 1), "customer no-work"),
+]
+
+
+def _recovery_dest_dates_from_no_work(ranges: list[tuple[date, date, str]]) -> frozenset[date]:
+    """First calendar day after each no-work block ends (Dest_In date for first trip surcharge)."""
+    return frozenset(b + timedelta(days=1) for _a, b, _n in ranges)
+
+
+_DEFAULT_OUTBOUND_HALF_DATES: frozenset[date] = _recovery_dest_dates_from_no_work(_DEFAULT_NO_WORK_RANGES)
+
 
 
 _DEFAULT_CONFIG = OatsideConfig(
@@ -61,6 +107,23 @@ _DEFAULT_CONFIG = OatsideConfig(
     max_origin_chain_gap_h=3.0,
     enable_origin_chain_merge=False,
     charge_min_trip_shortfall=False,
+    use_origin_24h_fifty=True,
+    use_origin_day_fifty=True,
+    customer_idle_windows=[
+        CustomerIdleWindow(
+            plate="71-8967",
+            start=datetime(2026, 4, 20, 14, 0, 0),
+            end=datetime(2026, 4, 29, 17, 0, 0),
+            note="Factory parked CONTEXT_LOG 90-91",
+        ),
+    ],
+    customer_no_work_ranges=list(_DEFAULT_NO_WORK_RANGES),
+    outbound_half_dest_dates=_DEFAULT_OUTBOUND_HALF_DATES,
+    long_dest_wait_midnight_fifty=True,
+    long_dest_wait_midnight_min_h=12.0,
+    long_dest_wait_midnight_full_trip=True,
+    highlight_origin_wait_h=8.0,
+    highlight_dest_wait_h=8.0,
 )
 
 _DEFAULT_CONFIG_JSON = {
@@ -77,6 +140,32 @@ _DEFAULT_CONFIG_JSON = {
     "_note_max_origin_chain_gap_h": "hours: max gap Origin_Out(prev)->Origin_In(next) for chain-merge; larger gap = new hub visit (only if enable_origin_chain_merge is true)",
     "enable_origin_chain_merge": False,
     "_note_enable_origin_chain_merge": "false = never merge multiple Origin rows before one Dest (disables merge_chained_origin_pairs entirely)",
+    "use_origin_day_fifty": True,
+    "_note_use_origin_day_fifty": "true (default) = 50pct เมื่อ 1 เที่ยวต่อวันงาน (Origin_In calendar day) | ข้ามคืนไม่แตกวัน | วันไม่มี Origin ไม่นับ | มีผลก่อน use_origin_24h_fifty",
+    "use_origin_24h_fifty": True,
+    "_note_use_origin_24h_fifty": "true = 50pct downtime from rolling 24h windows anchored at each trip Origin_In chain; false = legacy Dest_In calendar day (1 trip => +50pct)",
+    "customer_idle_windows": [
+        {
+            "_note": "71-8967 P&G factory parking — customer-irrelevant dwell (CONTEXT_LOG Session #90–91)",
+            "plate": "71-8967",
+            "start": "2026-04-20 14:00:00",
+            "end": "2026-04-29 17:00:00",
+            "note": "Parked at customer — clip dest wait from Daily_Time / gap vs 24h",
+        },
+    ],
+    "customer_no_work": [
+        {"from": "2026-04-23", "to": "2026-04-24", "note": "customer no-work"},
+        {"from": "2026-04-27", "to": "2026-04-28", "note": "customer no-work"},
+        {"from": "2026-05-01", "to": "2026-05-01", "note": "customer no-work"}
+    ],
+    "long_dest_wait_midnight_fifty": True,
+    "long_dest_wait_midnight_min_h": 12,
+    "long_dest_wait_midnight_full_trip": True,
+    "_note_long_dest_wait_midnight_full": "true = charge full 1-trip rate on dest_date when midnight dwell rule fires; false = charge one_trip_surcharge_pct of rate",
+    "highlight_origin_wait_h": 8,
+    "highlight_dest_wait_h": 8,
+    "_note_long_dest_wait_midnight": "If Dest_In and Dest_Out cross midnight and dwell >= min_h, add surcharge by dest_date when no fifty row yet (origin_day mode gap)",
+    "_note_outbound_half": "If outbound_half_dest_dates omitted, recovery = day after each no-work block end; surcharge 50pct on first matched trip that Dest_In day",
     "charge_min_trip_shortfall": False,
     "_note_charge_min_trip_shortfall": "ถ้า false = ไม่เก็บเงินค่าชดเชยเที่ยวขาด (min trips) ในรายงานลูกค้า — ใช้ชาร์จ % วันละ 1 เที่ยวแทน | true = เก็บทั้งค่าชดเชย + % ตามเดิม",
 }
@@ -130,6 +219,34 @@ def load_oatside_config() -> OatsideConfig:
         gap_h = float(_DEFAULT_CONFIG.max_origin_chain_gap_h)
 
     chain_merge = bool(raw.get("enable_origin_chain_merge", _DEFAULT_CONFIG.enable_origin_chain_merge))
+    use_o24 = bool(raw.get("use_origin_24h_fifty", _DEFAULT_CONFIG.use_origin_24h_fifty))
+    use_o_day = bool(raw.get("use_origin_day_fifty", _DEFAULT_CONFIG.use_origin_day_fifty))
+    if "customer_idle_windows" not in raw:
+        idle_raw = _DEFAULT_CONFIG_JSON["customer_idle_windows"]
+    else:
+        idle_raw = raw.get("customer_idle_windows") or []
+    idle_wins: list[CustomerIdleWindow] = []
+    if isinstance(idle_raw, list):
+        for w in idle_raw:
+            if not isinstance(w, dict):
+                continue
+            pl = str(w.get("plate", "")).strip()
+            st = _parse_dt(w.get("start"))
+            en = _parse_dt(w.get("end"))
+            if not pl or not st or not en or en <= st:
+                continue
+            note = str(w.get("note", "")).strip()
+            idle_wins.append(CustomerIdleWindow(plate=pl, start=st, end=en, note=note))
+
+    if "customer_no_work" not in raw:
+        nwr = list(_DEFAULT_NO_WORK_RANGES)
+    else:
+        nwr = _parse_no_work_entries(raw.get("customer_no_work"))
+        if not nwr:
+            nwr = list(_DEFAULT_NO_WORK_RANGES)
+    ohd = _parse_date_set(raw.get("outbound_half_dest_dates"))
+    if not ohd:
+        ohd = frozenset(_recovery_dest_dates_from_no_work(nwr))
 
     return OatsideConfig(
         trip_rates=trip_rates,
@@ -139,6 +256,26 @@ def load_oatside_config() -> OatsideConfig:
         max_origin_chain_gap_h=gap_h,
         enable_origin_chain_merge=chain_merge,
         charge_min_trip_shortfall=charge_sf,
+        use_origin_24h_fifty=use_o24,
+        use_origin_day_fifty=use_o_day,
+        customer_idle_windows=idle_wins,
+        customer_no_work_ranges=nwr,
+        outbound_half_dest_dates=ohd,
+        long_dest_wait_midnight_fifty=bool(
+            raw.get("long_dest_wait_midnight_fifty", _DEFAULT_CONFIG.long_dest_wait_midnight_fifty)
+        ),
+        long_dest_wait_midnight_min_h=float(
+            raw.get("long_dest_wait_midnight_min_h", _DEFAULT_CONFIG.long_dest_wait_midnight_min_h)
+        ),
+        long_dest_wait_midnight_full_trip=bool(
+            raw.get("long_dest_wait_midnight_full_trip", _DEFAULT_CONFIG.long_dest_wait_midnight_full_trip)
+        ),
+        highlight_origin_wait_h=float(
+            raw.get("highlight_origin_wait_h", _DEFAULT_CONFIG.highlight_origin_wait_h)
+        ),
+        highlight_dest_wait_h=float(
+            raw.get("highlight_dest_wait_h", _DEFAULT_CONFIG.highlight_dest_wait_h)
+        ),
     )
 
 
@@ -375,6 +512,37 @@ def hours(a: datetime, b: datetime) -> float:
     return (b - a).total_seconds() / 3600.0
 
 
+def customer_idle_clip_dest_wait_h(trip: Trip, cfg: OatsideConfig) -> float:
+    """Subtract hours of (Dest_In, Dest_Out) overlapping customer_idle_windows for this plate."""
+    raw = hours(trip.d_in, trip.d_out)
+    sub = 0.0
+    for w in cfg.customer_idle_windows:
+        if w.plate != trip.plate:
+            continue
+        sub += w.overlap_hours(trip.d_in, trip.d_out)
+    return max(0.0, raw - sub)
+
+
+def origin24h_windows_for_plate(sorted_trips: list[Trip]) -> list[tuple[datetime, datetime, list[Trip]]]:
+    """Rolling windows: each window [anchor, anchor+24h) collects all trips with Origin_In in range; next anchor = first trip not yet in any window."""
+    out: list[tuple[datetime, datetime, list[Trip]]] = []
+    if not sorted_trips:
+        return out
+    i = 0
+    trs = sorted_trips
+    while i < len(trs):
+        anchor = trs[i].o_in
+        end = anchor + timedelta(hours=24)
+        bucket: list[Trip] = []
+        j = i
+        while j < len(trs) and trs[j].o_in < end:
+            bucket.append(trs[j])
+            j += 1
+        out.append((anchor, end, bucket))
+        i = j if j > i else i + 1
+    return out
+
+
 def feasible(o: Leg, d: Leg, max_travel_h: float) -> bool:
     if d.t_in < o.t_out:
         return False
@@ -390,18 +558,18 @@ def feasible(o: Leg, d: Leg, max_travel_h: float) -> bool:
 def match_plate(
     origins: list[Leg], dests: list[Leg], max_travel_h: float
 ) -> tuple[list[tuple[Leg, Leg]], list[Leg], list[Leg]]:
-    """Pair each destination (time order) with the latest unused origin where
-    Dest_In >= Origin_Out and travel <= max_travel_h.
+    """Pair each destination (time order) with the most-recently-arrived unused origin
+    (latest t_in before Dest_In) where Dest_In >= Origin_Out and travel <= max_travel_h.
 
-    Origin-first greedy caused short hub exits to claim far Dest_In legs, leaving
-    longer hub sessions unmatched and triggering demote_chronology_violations churn.
-    Latest-origin-before-dest is closer to real dispatch (last exit before delivery)."""
+    Sort origins by t_in descending: most recent hub arrival is the natural dispatch
+    candidate — earlier visits have lower priority even if their t_out is later."""
     dests_sorted = sorted(dests, key=lambda x: (x.t_in, x.t_out))
     used_o: set[int] = set()
     pairs: list[tuple[Leg, Leg]] = []
     for d in dests_sorted:
         best_o: Leg | None = None
-        for o in sorted(origins, key=lambda x: x.t_out, reverse=True):
+        # latest t_in first — most recent hub arrival dispatched preferentially
+        for o in sorted(origins, key=lambda x: x.t_in, reverse=True):
             if id(o) in used_o:
                 continue
             if not feasible(o, d, max_travel_h):
@@ -701,6 +869,59 @@ def base_trips_revenue_baht(trips: list[Trip], cfg: OatsideConfig) -> int:
     return sum(trip_rate_baht(t.dest_date, cfg) for t in trips)
 
 
+def one_trip_fifty_pct_details_origin24h(
+    trips: list[Trip],
+    overrides: dict[tuple[str, date], dict[str, Any]],
+    cfg: OatsideConfig,
+) -> tuple[list[dict], int]:
+    """+50% of one trip rate when a rolling 24h window from Origin_In contains exactly 1 matched trip. At most one origin24h surcharge per (plate, dest_date) (avoid double 24h windows on same Dest_In calendar day)."""
+    by_pl: dict[str, list[Trip]] = defaultdict(list)
+    for t in trips:
+        by_pl[t.plate].append(t)
+    rows: list[dict] = []
+    total = 0
+    origin24h_charged_dest: set[tuple[str, date]] = set()
+    for plate in sorted(by_pl.keys()):
+        lst = sorted(by_pl[plate], key=lambda x: x.o_in)
+        for anchor, end, bucket in origin24h_windows_for_plate(lst):
+            n = len(bucket)
+            if n != 1:
+                continue
+            t0 = bucket[0]
+            d = t0.dest_date
+            key = (plate, d)
+            if key in origin24h_charged_dest:
+                continue
+            origin24h_charged_dest.add(key)
+            ov = overrides.get(key, {})
+            action = ov.get("action", "")
+            note = ov.get("note", "")
+            if action == "exclude_50":
+                continue
+            if action == "include_50":
+                pass
+            rate = trip_rate_baht(d, cfg)
+            sur = int(round(rate * cfg.one_trip_surcharge_pct / 100))
+            rows.append(
+                {
+                    "dest_date": d,
+                    "window_anchor": anchor,
+                    "window_end": end,
+                    "plate": plate,
+                    "site": site_for_plate(plate),
+                    "trips_that_day": n,
+                    "auto_1trip": True,
+                    "override_action": action,
+                    "override_note": note,
+                    "trip_rate_baht": rate,
+                    "surcharge_baht": sur,
+                    "fifty_kind": "origin24h",
+                }
+            )
+            total += sur
+    return rows, total
+
+
 def one_trip_fifty_pct_details(
     trips: list[Trip],
     overrides: dict[tuple[str, date], dict[str, Any]],
@@ -739,8 +960,11 @@ def one_trip_fifty_pct_details(
                 "auto_1trip": auto_apply,
                 "override_action": action or "",
                 "override_note": note,
+                "window_anchor": "",
+                "window_end": "",
                 "trip_rate_baht": rate,
                 "surcharge_baht": sur,
+                "fifty_kind": "downtime_dest",
             }
         )
         total += sur
@@ -748,20 +972,56 @@ def one_trip_fifty_pct_details(
 
 
 def plate_dest_day_rows(
-    trips: list[Trip], fifty_rows: list[dict], cfg: OatsideConfig
+    trips: list[Trip],
+    fifty_rows: list[dict],
+    cfg: OatsideConfig,
+    nw_rows: list[dict] | None = None,
 ) -> list[dict]:
-    """Per (plate, Dest_In date): trip count, base line, whether 50% charged (after overrides)."""
+    """Per (plate, Dest_In date): base line + sum surcharges; HTML cell can show multiple badges."""
     by_pd: dict[tuple[str, date], list[Trip]] = defaultdict(list)
     for t in trips:
         by_pd[(t.plate, t.dest_date)].append(t)
-    fifty_key = {(r["plate"], r["dest_date"]): r for r in fifty_rows}
+    fifty_lists: dict[tuple[str, date], list[dict]] = defaultdict(list)
+    for r in fifty_rows:
+        p = r.get("plate")
+        d = r.get("dest_date")
+        if p and isinstance(d, date):
+            fifty_lists[(str(p), d)].append(r)
+    nw_by: dict[tuple[str, date], dict] = {}
+    if nw_rows:
+        for nr in nw_rows:
+            nw_by[(str(nr["plate"]), nr["dest_date"])] = nr
     out: list[dict] = []
+    seen_keys: set[tuple[str, date]] = set()
     for (plate, d), lst in sorted(by_pd.items(), key=lambda x: (x[0][1], x[0][0])):
+        key = (str(plate), d)
+        seen_keys.add(key)
         rate = trip_rate_baht(d, cfg)
         n = len(lst)
         base_line = n * rate
-        fr = fifty_key.get((plate, d))
-        sur = int(fr["surcharge_baht"]) if fr else 0
+        frs = fifty_lists.get(key, [])
+        sur = sum(int(x.get("surcharge_baht", 0) or 0) for x in frs)
+        badge_parts: list[str] = []
+        for x in frs:
+            b = html_fifty_surcharge_badge(x, cfg)
+            if b:
+                badge_parts.append(b)
+        nr = nw_by.get(key)
+        if nr:
+            ns = int(nr.get("surcharge_baht", 0) or 0)
+            if ns > 0:
+                sur += ns
+                synth = {
+                    "plate": plate,
+                    "dest_date": d,
+                    "trip_rate_baht": int(nr.get("trip_rate_baht", 0) or 0),
+                    "surcharge_baht": ns,
+                    "fifty_kind": "no_work_outbound",
+                }
+                b2 = html_fifty_surcharge_badge(synth, cfg)
+                if b2:
+                    badge_parts.append(b2)
+        badge = " ".join(badge_parts) if badge_parts else ""
         out.append(
             {
                 "dest_date": d,
@@ -771,9 +1031,59 @@ def plate_dest_day_rows(
                 "trip_rate_baht": rate,
                 "base_line_baht": base_line,
                 "fifty_pct_baht": sur,
+                "fifty_badge_html": badge,
                 "customer_day_baht": base_line + sur,
             }
         )
+
+    # Synthetic rows: recovery No-work anchor day may have no matched Dest_In that calendar date
+    if nw_rows:
+        for nr in nw_rows:
+            nk = (str(nr["plate"]), nr["dest_date"])
+            if nk in seen_keys:
+                continue
+            seen_keys.add(nk)
+            plate, d = nk[0], nk[1]
+            rate = trip_rate_baht(d, cfg)
+            frs = fifty_lists.get(nk, [])
+            sur = sum(int(x.get("surcharge_baht", 0) or 0) for x in frs)
+            badge_parts: list[str] = []
+            for x in frs:
+                b = html_fifty_surcharge_badge(x, cfg)
+                if b:
+                    badge_parts.append(b)
+            ns = int(nr.get("surcharge_baht", 0) or 0)
+            if ns > 0:
+                sur += ns
+                synth = {
+                    "plate": plate,
+                    "dest_date": d,
+                    "trip_rate_baht": int(nr.get("trip_rate_baht", 0) or 0),
+                    "surcharge_baht": ns,
+                    "fifty_kind": "no_work_outbound",
+                }
+                b2 = html_fifty_surcharge_badge(synth, cfg)
+                if b2:
+                    badge_parts.append(b2)
+            badge = " ".join(badge_parts) if badge_parts else ""
+            out.append(
+                {
+                    "dest_date": d,
+                    "plate": plate,
+                    "site": site_for_plate(plate),
+                    "matched_trips": 0,
+                    "trip_rate_baht": rate,
+                    "base_line_baht": 0,
+                    "fifty_pct_baht": sur,
+                    "fifty_badge_html": badge,
+                    "customer_day_baht": sur,
+                }
+            )
+
+    out.sort(key=lambda r: (r["dest_date"], str(r["plate"])))
+    return out
+
+
     return out
 
 
@@ -832,6 +1142,172 @@ def audit_log_rows(
 
         rows.append({
             "dest_date": d,
+            "plate": plate,
+            "site": site_for_plate(plate),
+            "matched_trips": n,
+            "trip_rate_baht": rate,
+            "base_line_baht": base,
+            "fifty_pct_baht": sur,
+            "customer_day_baht": total,
+            "billing_note": fifty_rule,
+        })
+    return rows
+
+
+def one_trip_fifty_pct_origin_day(
+    trips: list[Trip],
+    overrides: dict[tuple[str, date], dict[str, Any]],
+    cfg: OatsideConfig,
+) -> tuple[list[dict], int]:
+    """50% surcharge when exactly 1 matched trip on Origin_In calendar day (วันงาน).
+    Rules (Session #94): วันงาน = Origin_In date; ข้ามคืนไม่แตกวัน; วันไม่มี Origin ไม่นับ.
+    Override key uses dest_date for compatibility with oatside_billing_overrides.json."""
+    by_pd: dict[tuple[str, date], list[Trip]] = defaultdict(list)
+    for t in trips:
+        by_pd[(t.plate, t.o_in.date())].append(t)
+    rows: list[dict] = []
+    total = 0
+    for (plate, origin_day), lst in sorted(by_pd.items(), key=lambda x: (x[0][1], x[0][0])):
+        n = len(lst)
+        if n != 1:
+            continue
+        t0 = lst[0]
+        key = (plate, t0.dest_date)
+        ov = overrides.get(key, {})
+        action = ov.get("action", "")
+        note = ov.get("note", "")
+        if action == "exclude_50":
+            continue
+        rate = trip_rate_baht(t0.dest_date, cfg)
+        sur = int(round(rate * cfg.one_trip_surcharge_pct / 100))
+        note_l = (note or "").lower()
+        fifty_kind = (
+            "blank_run"
+            if (action == "blank_run" or "ตีเปล่า" in note_l)
+            else "downtime_origin_day"
+        )
+        rows.append({
+            "origin_day": origin_day,
+            "dest_date": t0.dest_date,
+            "plate": plate,
+            "site": site_for_plate(plate),
+            "trips_that_day": n,
+            "auto_1trip": True,
+            "override_action": action,
+            "override_note": note,
+            "window_anchor": str(origin_day),
+            "window_end": "",
+            "trip_rate_baht": rate,
+            "surcharge_baht": sur,
+            "fifty_kind": fifty_kind,
+        })
+        total += sur
+    return rows, total
+
+
+
+
+def supplement_long_dest_wait_midnight_fifty(
+    trips: list[Trip],
+    fifty_rows: list[dict],
+    overrides: dict[tuple[str, date], dict[str, Any]],
+    cfg: OatsideConfig,
+) -> tuple[list[dict], int]:
+    """Dest_In->Dest_Out crosses midnight, dwell >= min_h: add surcharge keyed by (plate, dest_date)
+    when no fifty row yet. Default: full 1-trip rate (not 50pct) — idle calendar day at customer."""
+    if not getattr(cfg, "long_dest_wait_midnight_fifty", True):
+        return [], 0
+    min_h = float(getattr(cfg, "long_dest_wait_midnight_min_h", 12.0))
+    full_trip = bool(getattr(cfg, "long_dest_wait_midnight_full_trip", True))
+    charged: dict[tuple[str, date], int] = {}
+    for r in fifty_rows:
+        p = r.get("plate")
+        d = r.get("dest_date")
+        if p and isinstance(d, date):
+            charged[(str(p), d)] = int(r.get("surcharge_baht", 0) or 0)
+    extra: list[dict] = []
+    total = 0
+    for t in trips:
+        if t.d_in.date() >= t.d_out.date():
+            continue
+        if t.dest_wait_h < min_h:
+            continue
+        key = (t.plate, t.dest_date)
+        if charged.get(key, 0) > 0:
+            continue
+        ov = overrides.get(key, {})
+        if ov.get("action") == "exclude_50":
+            continue
+        rate = trip_rate_baht(t.dest_date, cfg)
+        if full_trip:
+            sur = int(rate)
+            pct_note = "เต็ม 1 เที่ยว (เรทวัน Dest_In)"
+        else:
+            sur = int(round(rate * float(cfg.one_trip_surcharge_pct) / 100.0))
+            pct_note = f"+{cfg.one_trip_surcharge_pct:.0f}% เรทวัน Dest_In"
+        note = (
+            f"รอปลายทางข้ามคืน Dest_In→Dest_Out ({t.dest_wait_h:.2f}h); {pct_note}"
+        )
+        extra.append(
+            {
+                "origin_day": t.o_in.date(),
+                "dest_date": t.dest_date,
+                "plate": t.plate,
+                "site": site_for_plate(t.plate),
+                "trips_that_day": 1,
+                "auto_1trip": False,
+                "override_action": ov.get("action", "") or "",
+                "override_note": (ov.get("note", "") or "") + ("; " if ov.get("note") else "") + note,
+                "window_anchor": str(t.d_in),
+                "window_end": str(t.d_out),
+                "trip_rate_baht": rate,
+                "surcharge_baht": sur,
+                "fifty_kind": ("midnight_full" if full_trip else "midnight_pct"),
+            }
+        )
+        charged[key] = sur
+        total += sur
+    return extra, total
+
+
+def origin_day_audit_rows(
+    trips: list[Trip],
+    fifty_rows: list[dict],
+    overrides: dict[tuple[str, date], dict[str, Any]],
+    cfg: OatsideConfig,
+) -> list[dict]:
+    """Per (plate, origin_day): billing explanation grouped by Origin_In calendar date."""
+    by_pd: dict[tuple[str, date], list[Trip]] = defaultdict(list)
+    for t in trips:
+        by_pd[(t.plate, t.o_in.date())].append(t)
+    fifty_key = {(r["plate"], r["origin_day"]): r for r in fifty_rows if "origin_day" in r}
+    rows: list[dict] = []
+    for (plate, origin_day), lst in sorted(by_pd.items(), key=lambda x: (x[0][1], x[0][0])):
+        n = len(lst)
+        t0 = min(lst, key=lambda x: x.o_in)
+        rate = trip_rate_baht(t0.dest_date, cfg)
+        base = n * rate
+        fr = fifty_key.get((plate, origin_day))
+        sur = int(fr["surcharge_baht"]) if fr else 0
+        total = base + sur
+        ov = overrides.get((plate, t0.dest_date), {})
+        action = ov.get("action", "")
+        note = ov.get("note", "")
+        if action == "exclude_50":
+            fifty_rule = f"ไม่เก็บ {cfg.one_trip_surcharge_pct:.0f}% [override: exclude_50]"
+            if note:
+                fifty_rule += f" — {note}"
+        elif action == "include_50":
+            fifty_rule = f"เก็บ {cfg.one_trip_surcharge_pct:.0f}% [override: include_50]"
+            if note:
+                fifty_rule += f" — {note}"
+        elif n == 1:
+            fifty_rule = f"เก็บ {cfg.one_trip_surcharge_pct:.0f}% อัตโนมัติ (วันงาน 1 เที่ยว)"
+        else:
+            fifty_rule = f"ไม่เก็บ {cfg.one_trip_surcharge_pct:.0f}% (วันงาน {n} เที่ยว)"
+        rows.append({
+            "origin_day": origin_day,
+            "dest_date": t0.dest_date,
             "plate": plate,
             "site": site_for_plate(plate),
             "matched_trips": n,
@@ -910,16 +1386,21 @@ def site_billing(rows: list[tuple[date, dict]], cfg: OatsideConfig) -> tuple[int
     return bc_a, bc_c, bc_s, bc_e, lc_a, lc_c, lc_s, lc_e
 
 
-def daily_time_rows(trips: list[Trip], unmatched: list[tuple[str, Leg, str]]) -> list[tuple]:
+def daily_time_rows(
+    trips: list[Trip], unmatched: list[tuple[str, Leg, str]], cfg: OatsideConfig
+) -> list[tuple]:
     matched_cycle_h: dict[tuple[date, str], float] = defaultdict(float)
     matched_origin_wait_h: dict[tuple[date, str], float] = defaultdict(float)
     matched_dest_wait_h: dict[tuple[date, str], float] = defaultdict(float)
     matched_travel_h: dict[tuple[date, str], float] = defaultdict(float)
     for t in trips:
         key = (t.trip_date, t.plate)
-        matched_cycle_h[key] += t.total_cycle_h
+        dw_raw = t.dest_wait_h
+        dw_adj = customer_idle_clip_dest_wait_h(t, cfg)
+        cycle_adj = t.total_cycle_h - max(0.0, dw_raw - dw_adj)
+        matched_cycle_h[key] += max(0.0, cycle_adj)
         matched_origin_wait_h[key] += t.origin_wait_h
-        matched_dest_wait_h[key] += t.dest_wait_h
+        matched_dest_wait_h[key] += dw_adj
         matched_travel_h[key] += t.travel_h
     uo: dict[tuple[date, str], float] = defaultdict(float)
     ud: dict[tuple[date, str], float] = defaultdict(float)
@@ -931,7 +1412,11 @@ def daily_time_rows(trips: list[Trip], unmatched: list[tuple[str, Leg, str]]) ->
         if src == "Origin":
             uo[key] += h
         else:
-            ud[key] += h
+            h2 = h
+            for w in cfg.customer_idle_windows:
+                if w.plate == leg.plate:
+                    h2 -= w.overlap_hours(leg.t_in, leg.t_out)
+            ud[key] += max(0.0, h2)
     keys = sorted(
         set(matched_cycle_h) | set(matched_origin_wait_h) | set(matched_dest_wait_h)
         | set(matched_travel_h) | set(uo) | set(ud),
@@ -958,6 +1443,396 @@ def daily_time_rows(trips: list[Trip], unmatched: list[tuple[str, Leg, str]]) ->
     return rows
 
 
+
+def _parse_no_work_entries(raw: object) -> list[tuple[date, date, str]]:
+    out: list[tuple[date, date, str]] = []
+    if not isinstance(raw, list):
+        return out
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        a = _parse_dt(item.get("from") or item.get("start"))
+        b = _parse_dt(item.get("to") or item.get("end"))
+        if not a or not b:
+            continue
+        da, db = a.date(), b.date()
+        if db < da:
+            da, db = db, da
+        note = str(item.get("note", "")).strip()
+        out.append((da, db, note))
+    return out
+
+
+def _parse_date_set(raw: object) -> frozenset[date]:
+    if not isinstance(raw, list) or not raw:
+        return frozenset()
+    s: set[date] = set()
+    for x in raw:
+        if isinstance(x, str) and len(x) >= 10:
+            try:
+                s.add(datetime.strptime(x[:10], "%Y-%m-%d").date())
+            except ValueError:
+                continue
+    return frozenset(s)
+
+
+def first_matched_trip_by_plate_dest(trips: list[Trip]) -> dict[tuple[str, date], Trip]:
+    by: dict[tuple[str, date], list[Trip]] = defaultdict(list)
+    for t in trips:
+        by[(t.plate, t.dest_date)].append(t)
+    return {k: min(lst, key=lambda x: x.d_in) for k, lst in by.items()}
+
+
+
+def first_no_work_trip_by_plate_recovery_day(
+    trips: list[Trip], cfg: OatsideConfig
+) -> dict[tuple[str, date], Trip]:
+    """(plate, recovery_R) -> trip that carries No-work outbound +50%%.
+
+    ``recovery_R`` is a calendar date in ``outbound_half_dest_dates`` (day after no-work block).
+
+    1) Prefer matched trips with ``dest_date == R`` (earliest ``d_in``).
+    2) Else matched trips with ``origin_date == R`` and ``dest_date > R`` (overnight; earliest ``o_in``).
+       Fixes trucks that start on recovery morning but ``Dest_In`` falls next calendar day.
+    """
+    out: dict[tuple[str, date], Trip] = {}
+    for R in cfg.outbound_half_dest_dates:
+        plates = {t.plate for t in trips}
+        for plate in plates:
+            same_dest = [t for t in trips if t.plate == plate and t.dest_date == R]
+            if same_dest:
+                out[(plate, R)] = min(same_dest, key=lambda x: x.d_in)
+                continue
+            cross = [t for t in trips if t.plate == plate and t.origin_date == R and t.dest_date > R]
+            if cross:
+                out[(plate, R)] = min(cross, key=lambda x: x.o_in)
+    return out
+
+
+def _split_fifty_surcharge_50_100(frs: list[dict]) -> tuple[int, int]:
+    """Sum fifty surcharges into +50%% bucket vs +100%% bucket (exclude no-work/blank_run rows)."""
+    a50 = 0
+    a100 = 0
+    for r in frs:
+        sur = int(r.get("surcharge_baht", 0) or 0)
+        if sur <= 0:
+            continue
+        k = str(r.get("fifty_kind") or "")
+        if k == "midnight_full":
+            a100 += sur
+        elif k in ("no_work_outbound", "blank_run"):
+            continue
+        elif k == "midnight_pct":
+            a50 += sur
+        elif k in ("downtime_dest", "downtime_origin_day", "origin24h"):
+            a50 += sur
+        else:
+            rate = int(r.get("trip_rate_baht", 0) or 0)
+            if rate > 0 and sur >= rate:
+                a100 += sur
+            else:
+                a50 += sur
+    return a50, a100
+
+
+def trip_row_pricing_cells(
+    t: Trip,
+    *,
+    firsts: dict[tuple[str, date], Trip],
+    first_no_work: dict[tuple[str, date], Trip],
+    fifty_by_lists: dict[tuple[str, date], list[dict]],
+    cfg: OatsideConfig,
+) -> str:
+    """HTML <td>…×4 after wait columns: base rate, downtime+50, downtime+100, blank(no-work)+50."""
+    rate = trip_rate_baht(t.dest_date, cfg)
+    ft = firsts.get((t.plate, t.dest_date))
+    frs = fifty_by_lists.get((str(t.plate), t.dest_date), [])
+    dw50 = dw100 = 0
+    if ft is not None and id(ft) == id(t):
+        dw50, dw100 = _split_fifty_surcharge_50_100(frs)
+    nw_amt = trip_no_work_outbound_baht(t, first_no_work, cfg)
+
+    def money_td(n: int) -> str:
+        return f"<td class='money'>{n:,}</td>" if n else "<td>—</td>"
+
+    return (
+        f"<td class='money'>{rate:,}</td>"
+        + money_td(dw50)
+        + money_td(dw100)
+        + money_td(nw_amt)
+    )
+
+
+def no_work_outbound_rows(trips: list[Trip], cfg: OatsideConfig) -> tuple[list[dict], int]:
+    """+50pct of trip rate on first matched trip after recovery calendar day R (see first_no_work_trip_by_plate_recovery_day)."""
+    first_no_work = first_no_work_trip_by_plate_recovery_day(trips, cfg)
+    rows: list[dict] = []
+    total = 0
+    pct = float(cfg.one_trip_surcharge_pct)
+    for (plate, R), t0 in sorted(first_no_work.items(), key=lambda x: (x[0][1], x[0][0])):
+        rate = trip_rate_baht(R, cfg)
+        sur = int(round(rate * pct / 100.0))
+        rows.append(
+            {
+                "dest_date": R,
+                "plate": plate,
+                "site": site_for_plate(plate),
+                "d_row": t0.d_row,
+                "trip_rate_baht": rate,
+                "surcharge_baht": sur,
+                "note": (
+                    "No-work recovery: anchor "
+                    f"{R} (Dest_In of chosen trip {t0.dest_date})"
+                ),
+            }
+        )
+        total += sur
+    return rows, total
+
+
+def phantom_zero_trip_candidates(origin_legs: list[Leg], trips: list[Trip], cfg: OatsideConfig) -> list[dict]:
+    """Days with Origin legs but no matched trip on that trip_date (suggest 1 full trip charge)."""
+    matched_origin_days = {(t.plate, t.trip_date) for t in trips}
+    hours_by: dict[tuple[str, date], float] = defaultdict(float)
+    for leg in origin_legs:
+        d = leg.t_in.date()
+        hours_by[(leg.plate, d)] += hours(leg.t_in, leg.t_out)
+    rows: list[dict] = []
+    for (plate, d), h in sorted(hours_by.items(), key=lambda x: (x[0][1], x[0][0])):
+        if (plate, d) in matched_origin_days:
+            continue
+        if h < 1.0:
+            continue
+        rate = trip_rate_baht(d, cfg)
+        rows.append(
+            {
+                "plate": plate,
+                "calendar_date": d,
+                "origin_hours_on_day": round(h, 2),
+                "suggest_full_trip_baht": rate,
+                "note": "No matched trip on this trip_date; OAT rule: charge 1 full trip (review before adding to grand total)",
+            }
+        )
+    return rows
+
+
+def double_origin_um_hints(unmatched: list[tuple[str, Leg, str]]) -> list[dict]:
+    """Flag days with 2+ unmatched Origin segments (possible double hub in/out)."""
+    by: dict[tuple[str, date], int] = defaultdict(int)
+    for src, leg, plate in unmatched:
+        if src != "Origin":
+            continue
+        by[(plate, leg.t_in.date())] += 1
+    return [
+        {
+            "plate": plate,
+            "calendar_date": d,
+            "um_origin_segments": n,
+            "note": "2+ unmatched Origin rows same calendar day — review",
+        }
+        for (plate, d), n in sorted(by.items(), key=lambda x: (x[0][1], x[0][0]))
+        if n >= 2
+    ]
+
+
+def trip_no_work_outbound_baht(
+    t: Trip, first_no_work: dict[tuple[str, date], Trip], cfg: OatsideConfig
+) -> int:
+    pct = float(cfg.one_trip_surcharge_pct)
+    for R in cfg.outbound_half_dest_dates:
+        ft = first_no_work.get((t.plate, R))
+        if ft is None or id(ft) != id(t):
+            continue
+        rate = trip_rate_baht(R, cfg)
+        return int(round(rate * pct / 100.0))
+    return 0
+
+
+
+
+# ---------------------------------------------------------------------------
+# Excel styling & per-table exports (ลูกค้า)
+# ---------------------------------------------------------------------------
+
+OATSIDE_EXPORT_TABLES: list[tuple[str, str, str]] = [
+    ("Customer_Trips_Per_Day", "01_CPD_MatchedTripsPerDay.xlsx", "(1) จำนวนเที่ยวต่อวัน (matched Dest_In)"),
+    ("Plate_DestDay", "02_Plate_DestDay_Daily.xlsx", "(2) เดลี่รถทุกคัน — Dest_In × ทะเบียน"),
+    ("Unmatched_Log", "03_Unmatched_Legs.xlsx", "(3) Unmatched legs"),
+    ("Audit_Log", "04_Audit_Log.xlsx", "Audit Log — เหตุผลการคิดเงิน"),
+    ("Trip_Detail", "05_Trip_Detail.xlsx", "รายเที่ยว Trip Detail"),
+    ("Customer_Summary", "06_Customer_Summary.xlsx", "สรุปลูกค้า (บรรทัด A/B/C/D)"),
+    ("Daily_Activity", "07_Daily_Activity.xlsx", "Daily Activity (รวมไซท์)"),
+    ("Daily_Time_24h_Check", "08_Daily_Time_24h_Check.xlsx", "Daily Time 24h Check"),
+    ("Surcharge_50pct_1Trip", "09_Surcharge_50pct_1Trip.xlsx", "Surcharge 50% / 100% / ตีเปล่า (รายทะเบียน×วัน)"),
+    ("Manual_Extra_Trips", "10_Manual_Extra_Trips.xlsx", "เที่ยวเพิ่ม (manual_extra_trips)"),
+    ("Manual_Return_Trips", "11_Manual_Return_Trips.xlsx", "ค่าขนส่งขากลับ (manual_return_trips)"),
+    ("NoWork_Outbound_50pct", "12_NoWork_Outbound_50pct.xlsx", "No-work recovery outbound 50%"),
+    ("Phantom_Trip_Candidates", "13_Phantom_Trip_Candidates.xlsx", "Phantom trip candidates"),
+    ("Hints_DoubleOrigin", "14_Hints_DoubleOrigin.xlsx", "Hints double-origin (UM)"),
+]
+
+
+def _hdr_moneyish(cell_val) -> bool:
+    if cell_val is None:
+        return False
+    s = str(cell_val).lower()
+    t = str(cell_val)
+    return ("฿" in t) or ("baht" in s) or ("บาท" in t)
+
+
+def _thin_border():
+    from openpyxl.styles import Border, Side
+
+    t = Side(style="thin", color="CCD6E4")
+    return Border(left=t, right=t, top=t, bottom=t)
+
+
+def beautify_oatside_workbook(wb) -> None:
+    """Apply consistent table styling to all sheets (Info = compact key/value)."""
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    head_fill = PatternFill("solid", fgColor="1E3A5F")
+    head_font = Font(color="FFFFFF", bold=True, size=11)
+    zebra = PatternFill("solid", fgColor="F4F7FB")
+    title_font = Font(bold=True, size=12, color="1E3A5F")
+    bdr = _thin_border()
+
+    for name in wb.sheetnames:
+        ws = wb[name]
+        if ws.max_row == 0 or ws.max_column == 0:
+            continue
+        if name == "Info":
+            for r in range(1, ws.max_row + 1):
+                a = ws.cell(r, 1)
+                b = ws.cell(r, 2)
+                a.font = title_font if r == 1 else Font(bold=True, color="2C3E50")
+                a.alignment = Alignment(vertical="top", wrap_text=True)
+                if b.value is not None:
+                    b.alignment = Alignment(vertical="top", wrap_text=True)
+                a.border = bdr
+                b.border = bdr
+            ws.column_dimensions["A"].width = 34
+            ws.column_dimensions["B"].width = 86
+            continue
+
+        hdr_row = 1
+        last_c = ws.max_column
+        last_r = ws.max_row
+        money_cols: set[int] = set()
+        for c in range(1, last_c + 1):
+            hv = ws.cell(hdr_row, c).value
+            if _hdr_moneyish(hv):
+                money_cols.add(c)
+        for c in range(1, last_c + 1):
+            ch = get_column_letter(c)
+            cell = ws.cell(hdr_row, c)
+            cell.fill = head_fill
+            cell.font = head_font
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = bdr
+            maxlen = 10
+            for r in range(1, last_r + 1):
+                v = ws.cell(r, c).value
+                if v is None:
+                    continue
+                s = str(v)
+                maxlen = max(maxlen, min(len(s), 48))
+            ws.column_dimensions[ch].width = min(52, max(10, maxlen + 2))
+        for r in range(hdr_row + 1, last_r + 1):
+            fill = zebra if (r % 2 == 0) else None
+            for c in range(1, last_c + 1):
+                cell = ws.cell(r, c)
+                cell.border = bdr
+                if fill is not None:
+                    cell.fill = fill
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+                if c in money_cols and isinstance(cell.value, (int, float)):
+                    cell.number_format = "#,##0"
+        ws.freeze_panes = f"A{hdr_row + 1}"
+        ws.auto_filter.ref = f"A{hdr_row}:{get_column_letter(last_c)}{last_r}"
+
+
+def write_split_excel_exports(wb_path: Path, report_dir: Path, *, built_at: str) -> None:
+    """Write one .xlsx per customer-facing table under report_dir/exports/."""
+    from openpyxl import Workbook, load_workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    exp = report_dir / "exports"
+    exp.mkdir(parents=True, exist_ok=True)
+    src = load_workbook(wb_path, data_only=False)
+    head_fill = PatternFill("solid", fgColor="1E3A5F")
+    head_font = Font(color="FFFFFF", bold=True, size=11)
+    zebra = PatternFill("solid", fgColor="F4F7FB")
+    brand_font = Font(bold=True, size=14, color="FFFFFF")
+    sub_font = Font(size=11, color="2C3E50")
+    bdr = _thin_border()
+
+    for sheet_name, fname, th_label in OATSIDE_EXPORT_TABLES:
+        if sheet_name not in src.sheetnames:
+            continue
+        sws = src[sheet_name]
+        if sws.max_row == 0:
+            continue
+        nb = Workbook()
+        tws = nb.active
+        tws.title = sheet_name[:31]
+        mc = max(6, sws.max_column)
+        end_l = get_column_letter(mc)
+        tws.merge_cells(f"A1:{end_l}1")
+        c1 = tws["A1"]
+        c1.value = "Y.K. Logistics — Oatside / P&G"
+        c1.font = brand_font
+        c1.fill = head_fill
+        c1.alignment = Alignment(horizontal="center", vertical="center")
+        tws.row_dimensions[1].height = 26
+        tws.append([th_label, built_at])
+        tws["A2"].font = Font(bold=True, size=12, color="1E3A5F")
+        tws["B2"].font = sub_font
+        tws.append([""] * mc)
+        hdr_r = 4
+        for r in range(1, sws.max_row + 1):
+            for c in range(1, sws.max_column + 1):
+                tws.cell(hdr_r + r - 1, c).value = sws.cell(r, c).value
+        last_r = tws.max_row
+        last_c = tws.max_column
+        money_cols: set[int] = set()
+        for c in range(1, last_c + 1):
+            if _hdr_moneyish(tws.cell(hdr_r, c).value):
+                money_cols.add(c)
+        for c in range(1, last_c + 1):
+            ch = get_column_letter(c)
+            cell = tws.cell(hdr_r, c)
+            cell.fill = head_fill
+            cell.font = head_font
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = bdr
+            maxlen = 10
+            for r in range(hdr_r, last_r + 1):
+                v = tws.cell(r, c).value
+                if v is None:
+                    continue
+                s = str(v)
+                maxlen = max(maxlen, min(len(s), 48))
+            tws.column_dimensions[ch].width = min(52, max(10, maxlen + 2))
+        for r in range(hdr_r + 1, last_r + 1):
+            fill = zebra if (r % 2 == 0) else None
+            for c in range(1, last_c + 1):
+                cell = tws.cell(r, c)
+                cell.border = bdr
+                if fill is not None:
+                    cell.fill = fill
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+                if c in money_cols and isinstance(cell.value, (int, float)):
+                    cell.number_format = "#,##0"
+        tws.freeze_panes = f"A{hdr_r + 1}"
+        tws.auto_filter.ref = f"A{hdr_r}:{get_column_letter(last_c)}{last_r}"
+        nb.save(exp / fname)
+        nb.close()
+    src.close()
+
+
 # ---------------------------------------------------------------------------
 # Excel export
 # ---------------------------------------------------------------------------
@@ -975,10 +1850,14 @@ def write_excel(
     min_trip_extra_baht: int,
     audit_rows: list[dict],
     cfg: OatsideConfig,
+    customer_grand_baht: int,
+    no_work_rows: list[dict],
+    no_work_total_baht: int,
+    phantom_rows: list[dict],
+    hint_rows: list[dict],
 ) -> None:
     base_baht = base_trips_revenue_baht(trips, cfg)
-    customer_grand_baht = int(base_baht) + int(min_trip_extra_baht) + int(fifty_total_baht)
-    pday = plate_dest_day_rows(trips, fifty_rows, cfg)
+    pday = plate_dest_day_rows(trips, fifty_rows, cfg, nw_rows=no_work_rows)
     wb = openpyxl.Workbook()
     default = wb.active
     wb.remove(default)
@@ -1001,10 +1880,25 @@ def write_excel(
         f"If exactly 1 matched trip on Dest_In day -> add {cfg.one_trip_surcharge_pct:.0f}% of trip rate. "
         f"Overrides: {_overrides_json_path()} (exclude_50 / include_50)"])
     info.append(["Base_trips_revenue_baht", base_baht])
+    info.append(["Use_origin_24h_fifty", cfg.use_origin_24h_fifty])
+    info.append(["Customer_idle_windows", len(cfg.customer_idle_windows)])
     info.append(["Charge_min_trip_shortfall", cfg.charge_min_trip_shortfall])
     info.append(["Min2trips_extra_baht", min_trip_extra_baht])
     info.append(["Fifty_pct_surcharge_total_baht", fifty_total_baht])
-    cg_note = "base + min_trips + fifty" if cfg.charge_min_trip_shortfall else "base + fifty (min-trip shortfall not charged)"
+    info.append(["No_work_outbound_50pct_total_baht", no_work_total_baht])
+    info.append(
+        [
+            "Policy_recovery_plus_fifty",
+            "เก็บคู่: วัน recovery เที่ยวแรกอาจได้ทั้ง surcharge fifty (ดาวน์ไทม์) และ No-work outbound 50pct — บวกทั้งคู่ตามนโยบายผู้ใช้ 2026-05-01",
+        ]
+    )
+    info.append(["Phantom_zero_trip_candidates", len(phantom_rows)])
+    info.append(["Double_origin_um_hints", len(hint_rows)])
+    cg_note = (
+        "base + min_trips + fifty + no_work_recovery"
+        if cfg.charge_min_trip_shortfall
+        else "base + fifty + no_work_recovery (min-trip shortfall not charged)"
+    )
     info.append([f"Customer_grand_baht ({cg_note})", customer_grand_baht])
 
     # --- Customer Summary ---
@@ -1020,7 +1914,18 @@ def write_excel(
         )
     cs.append(["B", b_line, min_trip_extra_baht])
     cs.append(["C", f"ชาร์จ {cfg.one_trip_surcharge_pct:.0f}% วันที่วิ่งได้ 1 เที่ยว (หลัง override)", fifty_total_baht])
-    tot_lbl = "รวมเสนอลูกค้า (A+B+C)" if cfg.charge_min_trip_shortfall else "รวมเสนอลูกค้า (A+C)"
+    cs.append(
+        [
+            "D",
+            "No-work recovery outbound 50pct (first matched trip that Dest_In day on recovery dates)",
+            no_work_total_baht,
+        ]
+    )
+    tot_lbl = (
+        "Grand (A+B+C+D)"
+        if cfg.charge_min_trip_shortfall
+        else "Grand (A+C+D)"
+    )
     cs.append(["TOTAL", tot_lbl, customer_grand_baht])
 
     # --- Customer: trips per day (matched, by Dest_In date) ---
@@ -1053,17 +1958,24 @@ def write_excel(
         "Origin_Row", "Dest_Row",
         "Origin_In", "Origin_Out", "Origin_Wait_h",
         "Dest_In", "Dest_Out",
-        "Travel_h(OriginOut->DestIn)", "Dest_Wait_h", "Total_Cycle_h",
-        "Travel_Flag", "Billable_Trip",
+        "Travel_h(OriginOut->DestIn)", "Dest_Wait_h", "Dest_Wait_customer_h", "Customer_idle_clip_h",
+        "Total_Cycle_h", "Total_Cycle_customer_h",
+        "Travel_Flag", "Billable_Trip", "Nw_outbound50_baht",
     ])
+    firsts = first_matched_trip_by_plate_dest(trips)
+    first_no_work = first_no_work_trip_by_plate_recovery_day(trips, cfg)
     for t in sorted(trips, key=lambda x: (x.dest_date, x.plate, x.d_in)):
+        dw_c = customer_idle_clip_dest_wait_h(t, cfg)
+        clip = max(0.0, t.dest_wait_h - dw_c)
+        cyc_c = max(0.0, t.total_cycle_h - clip)
         td.append([
             t.trip_date, t.origin_date, t.dest_date,
             t.site, t.plate, t.device, t.o_row, t.d_row,
             t.o_in, t.o_out, round(t.origin_wait_h, 2),
             t.d_in, t.d_out,
-            round(t.travel_h, 2), round(t.dest_wait_h, 2), round(t.total_cycle_h, 2),
-            t.travel_flag, 1,
+            round(t.travel_h, 2), round(t.dest_wait_h, 2), round(dw_c, 2), round(clip, 2),
+            round(t.total_cycle_h, 2), round(cyc_c, 2),
+            t.travel_flag, 1, trip_no_work_outbound_baht(t, first_no_work, cfg),
         ])
 
     # --- Unmatched Log ---
@@ -1117,18 +2029,61 @@ def write_excel(
     # --- Surcharge 50% 1Trip ---
     lt = wb.create_sheet("Surcharge_50pct_1Trip")
     lt.append([
-        "Dest_In_date", "Plate", "Site", "Trips_that_day",
+        "Dest_In_date", "Plate", "Site", "Fifty_kind",
+        "Trips_that_day",
         "Auto_1trip_rule_Y/N", "Override_action", "Override_note",
+        "Window_Origin_In", "Window_End",
         "Trip_rate_baht", f"Surcharge_baht_{cfg.one_trip_surcharge_pct:.0f}pct",
     ])
     for r in fifty_rows:
         lt.append([
-            r["dest_date"], r["plate"], r["site"], r["trips_that_day"],
+            r["dest_date"], r["plate"], r["site"], str(r.get("fifty_kind", "")),
+            r["trips_that_day"],
             "Y" if r["auto_1trip"] else "N",
             r.get("override_action", ""), r.get("override_note", ""),
+            r.get("window_anchor", ""),
+            r.get("window_end", ""),
             r["trip_rate_baht"], r["surcharge_baht"],
         ])
 
+    nw = wb.create_sheet("NoWork_Outbound_50pct")
+    nw.append(
+        ["Dest_In_date", "Plate", "Site", "Dest_Row", "Trip_rate_baht", "Surcharge_baht_50pct", "Note"]
+    )
+    for r in no_work_rows:
+        nw.append(
+            [
+                r["dest_date"],
+                r["plate"],
+                r["site"],
+                r["d_row"],
+                r["trip_rate_baht"],
+                r["surcharge_baht"],
+                r.get("note", ""),
+            ]
+        )
+    ph = wb.create_sheet("Phantom_Trip_Candidates")
+    ph.append(
+        ["Plate", "Calendar_date", "Origin_hours", "Suggest_full_trip_baht", "Note"]
+    )
+    for r in phantom_rows:
+        ph.append(
+            [
+                r["plate"],
+                r["calendar_date"],
+                r["origin_hours_on_day"],
+                r["suggest_full_trip_baht"],
+                r.get("note", ""),
+            ]
+        )
+    hi = wb.create_sheet("Hints_DoubleOrigin")
+    hi.append(["Plate", "Calendar_date", "UM_Origin_segments", "Note"])
+    for r in hint_rows:
+        hi.append(
+            [r["plate"], r["calendar_date"], r["um_origin_segments"], r.get("note", "")]
+        )
+
+    beautify_oatside_workbook(wb)
     wb.save(path)
 
 
@@ -1138,6 +2093,63 @@ def write_excel(
 
 def esc(x) -> str:
     return html_module.escape(str(x), quote=True)
+
+
+_TRIPS_FILTER_JS = (
+    "<script>(function(){"
+    "var sel=document.getElementById('tripsPlateFilter');"
+    "var qel=document.getElementById('tripsPlateQuery');"
+    "var tb=document.querySelector('#tripsAllTable tbody');"
+    "if(!tb)return;"
+    "function run(){"
+    "var v=sel?(sel.value||'').trim():'';"
+    "var q=qel?(qel.value||'').trim().toLowerCase():'';"
+    "var rows=tb.querySelectorAll('tr');"
+    "for(var i=0;i<rows.length;i++){"
+    "var r=rows[i];"
+    "var p=(r.getAttribute('data-plate')||'');"
+    "var pok=!v||p===v;"
+    "var qok=!q||p.toLowerCase().indexOf(q)>=0;"
+    "r.style.display=(pok&&qok)?'':'none';"
+    "}"
+    "}"
+    "if(sel)sel.addEventListener('change',run);"
+    "if(qel)qel.addEventListener('input',run);"
+    "})();</script>"
+)
+
+
+def html_fifty_surcharge_badge(fr: dict, cfg: OatsideConfig) -> str:
+    """Badge: ตีเปล่า (เฉพาะที่ mark) vs ค่าเสียเวลา (+50%% / +100%% รวมข้ามคืน)."""
+    amt = int(fr.get("surcharge_baht", 0) or 0)
+    if amt <= 0:
+        return ""
+    rate = int(fr.get("trip_rate_baht", 0) or 0)
+    kind = str(fr.get("fifty_kind") or "")
+    pct = float(cfg.one_trip_surcharge_pct)
+    if kind == "blank_run":
+        label = f"ตีเปล่า +{pct:.0f}%"
+        cls = "blankrun"
+    elif kind == "no_work_outbound":
+        label = f"ตีเปล่า +{pct:.0f}%"
+        cls = "blankrun"
+    elif kind == "midnight_full" or (not kind and rate > 0 and amt >= rate):
+        label = "ค่าเสียเวลา +100%"
+        cls = "fulltrip"
+    elif kind == "midnight_pct":
+        label = f"ค่าเสียเวลา +{pct:.0f}%"
+        cls = "dwell"
+    elif kind in ("origin24h", "downtime_dest", "downtime_origin_day"):
+        label = f"ค่าเสียเวลา +{pct:.0f}%"
+        cls = "dwell"
+    else:
+        if rate > 0 and amt >= rate:
+            label = "ค่าเสียเวลา +100%"
+            cls = "fulltrip"
+        else:
+            label = f"ค่าเสียเวลา +{pct:.0f}%"
+            cls = "dwell"
+    return f"<span class='badge {cls}'>{label} ฿{amt:,}</span>"
 
 
 def fmt_h(x: float) -> str:
@@ -1182,10 +2194,22 @@ def unmatched_merged_trip_one_row_html(
         oi, oo = dash, dash
         di, do = leg.t_in, leg.t_out
     return (
-        f"<tr class='um'><td>{od}</td><td>{dd}</td>{site_plate}"
+        f"<tr class='um' data-plate='{esc(leg.plate)}'><td>{od}</td><td>{dd}</td>{site_plate}"
         f"<td>{oi}</td><td>{oo}</td><td>{di}</td><td>{do}</td>"
-        f"<td>{dash}</td><td>{dash}</td><td>{dash}</td></tr>"
+        f"<td>{dash}</td><td>{dash}</td><td>{dash}</td>"
+        f"<td>{dash}</td><td>{dash}</td><td>{dash}</td><td>{dash}</td></tr>"
     )
+
+
+
+def _tr_prepend_day_band(html: str, day: date) -> str:
+    """Zebra by calendar day (Origin_In day for matched; UM-O uses leg time; UM-D has no Origin on row — uses leg time) — subtle band in CSS."""
+    band = f"day-band-{day.toordinal() % 2}"
+    if html.startswith("<tr class='"):
+        return html.replace("<tr class='", f"<tr class='{band} ", 1)
+    if html.startswith("<tr>"):
+        return html.replace("<tr>", f"<tr class='{band}'>", 1)
+    return html
 
 
 def interleaved_matched_unmatched_rows_html(
@@ -1197,12 +2221,14 @@ def interleaved_matched_unmatched_rows_html(
     include_plate_link: bool = True,
     include_plate_column: bool = True,
 ) -> str:
-    """Sort matched (by Dest_In time) and unmatched (by leg time) into one timeline."""
+    """Sort matched by Origin_In time; unmatched by leg t_in (UM-O=Origin, UM-D=Dest)."""
     rows: list[tuple[datetime, tuple[Any, ...], str]] = []
     for t in trips:
         if plate is not None and t.plate != plate:
             continue
-        rows.append((t.d_in, (0, t.plate, t.d_row or "", t.o_row or ""), trip_row_cb(t)))
+        day = t.o_in.date()
+        html = _tr_prepend_day_band(trip_row_cb(t), day)
+        rows.append((t.o_in, (0, t.plate, t.d_row or "", t.o_row or ""), html))
     for src, leg, _mp in unmatched:
         if plate is not None and leg.plate != plate:
             continue
@@ -1212,6 +2238,7 @@ def interleaved_matched_unmatched_rows_html(
             include_plate_link=include_plate_link,
             include_plate_column=include_plate_column,
         )
+        um_html = _tr_prepend_day_band(um_html, leg.t_in.date())
         kind = 1 if src == "Origin" else 2
         rows.append((leg.t_in, (kind, leg.plate, src, leg.row_no), um_html))
     rows.sort(key=lambda x: (x[0], x[1]))
@@ -1241,13 +2268,29 @@ def write_html(
     pday_rows: list[dict],
     audit_rows: list[dict],
     unmatched: list[tuple[str, Leg, str]],
+    nw_total_baht: int,
     cfg: OatsideConfig,
 ) -> None:
     bc_a, bc_c, bc_s, bc_e, lc_a, lc_c, lc_s, lc_e = bc
     thr = iqr_threshold([t.travel_h for t in trips])
     abn = [t for t in trips if t.travel_flag]
     plates = sorted({t.plate for t in trips})
-    fifty_by_key = {(r["plate"], r["dest_date"]): r for r in fifty_rows}
+    fifty_by_lists: dict[tuple[str, date], list[dict]] = defaultdict(list)
+    for r in fifty_rows:
+        fifty_by_lists[(r["plate"], r["dest_date"])].append(r)
+    fifty_origin_lists: dict[tuple[str, date], list[dict]] = defaultdict(list)
+    for r in fifty_rows:
+        if "origin_day" in r:
+            fifty_origin_lists[(r["plate"], r["origin_day"])].append(r)
+    firsts = first_matched_trip_by_plate_dest(trips)
+    first_no_work = first_no_work_trip_by_plate_recovery_day(trips, cfg)
+    um_section_html = "".join(
+        f"<tr><td><span class='badge abn'>{'UM-O' if src == 'Origin' else 'UM-D'}</span></td>"
+        f"<td><a href='plates/{esc(leg.plate)}.html'>{esc(leg.plate)}</a></td>"
+        f"<td>{leg.t_in}</td><td>{leg.t_out}</td>"
+        f"<td class='note'>{'Origin ไม่มีคู่' if src == 'Origin' else 'Dest ไม่มีคู่'}</td></tr>"
+        for src, leg, _ in sorted(unmatched, key=lambda x: x[1].t_in)
+    ) or "<tr><td colspan=5 class='note'>ไม่มี Unmatched</td></tr>"
     sub = (
         f"สร้าง {datetime.now():%Y-%m-%d %H:%M} | ต้นทาง: {esc(Path(origin_label).name)} | "
         f"เรท: {config_rate_summary(cfg)} ฿/เที่ยว | "
@@ -1259,14 +2302,28 @@ def write_html(
         sub += " | ไม่เก็บเงินค่าชดเชยเที่ยวขาด (min trips) — ใช้ชาร์จ % วันละ 1 เที่ยวแทน"
 
 
+    _hi_o = float(getattr(cfg, "highlight_origin_wait_h", 8.0))
+    _hi_d = float(getattr(cfg, "highlight_dest_wait_h", 8.0))
+
+    def _td_wait_h(val: float, th: float, dest: bool) -> str:
+        cls = "wait-hi-dest" if dest else "wait-hi"
+        if val >= th:
+            lab = "ปลายทาง" if dest else "ต้นทาง"
+            return f"<td class='{cls}' title='รอ{lab} ≥ {th:g} ชม. (ตรวจพิจารณา)'>{fmt_hm(val)}</td>"
+        return f"<td>{fmt_hm(val)}</td>"
+
     def trip_row(t: Trip) -> str:
         ab = " <span class='badge abn'>ABNORMAL</span>" if t.travel_flag else ""
+        money = trip_row_pricing_cells(
+            t, firsts=firsts, first_no_work=first_no_work, fifty_by_lists=fifty_by_lists, cfg=cfg
+        )
         return (
-            f"<tr><td>{t.origin_date}</td><td>{t.dest_date}</td>"
+            f"<tr data-plate='{esc(t.plate)}'><td>{t.origin_date}</td><td>{t.dest_date}</td>"
             f"<td><span class='badge {'bigc' if t.site=='BigC' else 'lcb'}'>{t.site}</span></td>"
             f"<td><a href='plates/{esc(t.plate)}.html'>{esc(t.plate)}</a>{ab}</td>"
             f"<td>{t.o_in}</td><td>{t.o_out}</td><td>{t.d_in}</td><td>{t.d_out}</td>"
-            f"<td>{fmt_hm(t.origin_wait_h)}</td><td>{fmt_hm(t.travel_h)}</td><td>{fmt_hm(t.dest_wait_h)}</td></tr>"
+            f"{_td_wait_h(t.origin_wait_h, _hi_o, False)}<td>{fmt_hm(t.travel_h)}</td>{_td_wait_h(t.dest_wait_h, _hi_d, True)}"
+            f"{money}</tr>"
         )
 
     merged_all_rows = interleaved_matched_unmatched_rows_html(
@@ -1280,10 +2337,14 @@ def write_html(
 
     def trip_row_plate(t: Trip) -> str:
         ab = " <span class='badge abn'>ABNORMAL</span>" if t.travel_flag else ""
+        money = trip_row_pricing_cells(
+            t, firsts=firsts, first_no_work=first_no_work, fifty_by_lists=fifty_by_lists, cfg=cfg
+        )
         return (
-            f"<tr><td>{t.origin_date}</td><td>{t.dest_date}</td><td>{t.site}{ab}</td>"
+            f"<tr data-plate='{esc(t.plate)}'><td>{t.origin_date}</td><td>{t.dest_date}</td><td>{t.site}{ab}</td>"
             f"<td>{t.o_in}</td><td>{t.o_out}</td><td>{t.d_in}</td><td>{t.d_out}</td>"
-            f"<td>{fmt_hm(t.origin_wait_h)}</td><td>{fmt_hm(t.travel_h)}</td><td>{fmt_hm(t.dest_wait_h)}</td></tr>"
+            f"{_td_wait_h(t.origin_wait_h, _hi_o, False)}<td>{fmt_hm(t.travel_h)}</td>{_td_wait_h(t.dest_wait_h, _hi_d, True)}"
+            f"{money}</tr>"
         )
 
     daily_act_rows_html = "".join(
@@ -1314,15 +2375,18 @@ def write_html(
     lt_rows_html = "".join(
         f"<tr><td>{r['dest_date']}</td><td><a href='plates/{esc(r['plate'])}.html'>{esc(r['plate'])}</a></td>"
         f"<td><span class='badge {'bigc' if r['site']=='BigC' else 'lcb'}'>{r['site']}</span></td>"
+        f"<td class='note'>{esc(str(r.get('fifty_kind','')))}</td>"
         f"<td>{r['trips_that_day']}</td><td>{'Y' if r['auto_1trip'] else 'N'}</td>"
         f"<td>{esc(r.get('override_action',''))}</td><td>{esc(r.get('override_note',''))}</td>"
-        f"<td>{r['trip_rate_baht']:,}</td><td class='money'>{r['surcharge_baht']:,}</td></tr>"
+        f"<td>{esc(r.get('window_anchor',''))}</td><td>{esc(r.get('window_end',''))}</td>"
+        f"<td>{r['trip_rate_baht']:,}</td><td class='money'>{r['surcharge_baht']:,}</td>"
+        f"<td>{html_fifty_surcharge_badge(r, cfg)}</td></tr>"
         for r in fifty_rows
     )
 
-    # Audit table — สรุปเหตุผลรายวัน/ทะเบียน (เพิ่มใหม่)
+    # Audit table — สรุปเหตุผลรายวัน/ทะเบียน (origin_day เมื่อใช้ mode นั้น)
     audit_html = "".join(
-        f"<tr><td>{r['dest_date']}</td>"
+        f"<tr><td>{r.get('origin_day', r['dest_date'])}</td>"
         f"<td><a href='plates/{esc(r['plate'])}.html'>{esc(r['plate'])}</a></td>"
         f"<td><span class='badge {'bigc' if r['site']=='BigC' else 'lcb'}'>{r['site']}</span></td>"
         f"<td>{r['matched_trips']}</td><td>{r['trip_rate_baht']:,}</td>"
@@ -1342,75 +2406,89 @@ def write_html(
         ".label{font-size:12px;color:#63758f}.value{font-size:28px;font-weight:700}"
         ".money{color:#0d6b3c}.warn{color:#b54708}"
         ".panel{background:#fff;border-radius:10px;padding:14px;box-shadow:0 2px 8px rgba(16,24,40,.08);margin-bottom:14px}"
-        "table{width:100%;border-collapse:collapse;font-size:14px}"
+        "table{width:100%;border-collapse:collapse;font-size:14px}"".table-scroll{overflow:auto;max-height:72vh;border:1px solid #e6ebf2;border-radius:8px;margin-top:8px}"".table-scroll thead th{position:sticky;top:0;z-index:4;background:#eef3fa;box-shadow:0 1px 0 #c5d0e0}"
         "th,td{padding:8px;border-bottom:1px solid #e6ebf2;text-align:left}th{background:#eef3fa}"
-        ".badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700}"
+        ".badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;margin:0 6px 4px 0}"
         ".bigc{background:#dfebff;color:#0a4da1}.lcb{background:#e3f5e9;color:#0f6a3b}"
         ".abn{background:#ffe9e9;color:#b42318}.nav{margin-bottom:12px}"
-        ".note{color:#4b5b74;font-size:13px}"
+        ".note{color:#4b5b74;font-size:13px}.wait-hi{background:#fff3cd;font-weight:600}.wait-hi-dest{background:#ffe0b2;font-weight:600}"
+        ".fulltrip{background:#e3f2fd;color:#0d47a1}.blankrun{background:#ede7f6;color:#4a148c}.dwell{background:#fff3e0;color:#bf360c}"
         "tr.um td{color:#5a3b00}"
+        "tr.day-band-0 td{background:#fafcfe}tr.day-band-1 td{background:#e9f1fa}tr.day-band-0 td.wait-hi{background:#fff1cc;font-weight:600}tr.day-band-1 td.wait-hi{background:#ffecc4;font-weight:600}tr.day-band-0 td.wait-hi-dest{background:#ffe8c8;font-weight:600}tr.day-band-1 td.wait-hi-dest{background:#ffdfba;font-weight:600}""details.section-fold{margin-bottom:10px}""summary.section-sum{cursor:pointer;padding:10px 14px;background:#fff;border-radius:10px;font-weight:600;margin-bottom:6px;display:block;box-shadow:0 2px 8px rgba(16,24,40,.08);list-style:none}""summary.section-sum::-webkit-details-marker{display:none}"".filter-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0 14px}"".filter-bar label{font-size:13px;color:#4b5b74}"".filter-bar select,.filter-bar input[type=search]{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid #c5d0e0;background:#fff;min-width:160px}""summary.section-sum-row{display:flex!important;width:100%;box-sizing:border-box;justify-content:space-between;align-items:center;gap:12px;list-style:none}""summary.section-sum-row .sum-main{flex:1 1 auto;min-width:0;text-align:left}""summary.section-sum-row .sum-dl{margin-left:auto;flex:0 0 auto}"".xlsx-dl{font-size:12px;font-weight:700;color:#0b57d0;padding:5px 10px;border-radius:8px;border:1px solid #b8cff4;background:#eef5ff;white-space:nowrap}"".hero-trips{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;background:linear-gradient(135deg,#e8f1ff,#ffffff);border:1px solid #c5d0e0;border-radius:12px;padding:16px 18px;margin:12px 0 16px}"".hero-copy{max-width:720px}"".hero-tag{display:inline-block;font-size:11px;font-weight:700;color:#0b57d0;background:#e3eeff;border-radius:999px;padding:2px 10px;margin-bottom:6px}"".hero-title{font-size:20px;font-weight:800;color:#12243b;margin-bottom:4px}"".hero-sub{color:#4b5b74;font-size:13px;line-height:1.45}"".btn-primary{display:inline-block;padding:12px 18px;border-radius:10px;background:#0b57d0;color:#fff;font-weight:800;box-shadow:0 4px 12px rgba(11,87,208,.22)}"".btn-primary:hover{filter:brightness(1.05)}"".nav-secondary{margin:0 0 12px;font-size:13px;color:#4b5b74}"".panel-title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}"".panel-title-row h3{margin:0}"".h1 .trips-tag{font-size:13px;font-weight:800;color:#0b57d0;margin-left:8px;vertical-align:middle}"".trips-lead{color:#4b5b74;font-size:14px;margin:-2px 0 10px}"
     )
+
+    def _xlsx_dl(fname: str, short: str) -> str:
+        return (
+            "<a class='xlsx-dl' href='exports/"
+            + str(fname)
+            + "' download onclick='event.stopPropagation()'>ดาวน์โหลด "
+            + html_module.escape(str(short), quote=False)
+            + "</a>"
+        )
 
     idx = f"""<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>Oatside report</title><style>{css}</style></head><body>
-<div class='h1'>Oatside → P&G สรุปรายงาน</div>
+<div class='h1'>Oatside → P&amp;G สรุปรายงาน</div>
 <div class='sub'>{sub}</div>
-<div class='nav'><a href='trips.html'>ดูเที่ยวทั้งหมด</a></div>
-<div class='panel'><h3>สรุปให้ลูกค้า — จำนวนเที่ยวต่อวัน (matched)</h3>
-<p class='sub'>นับตาม<strong>วันที่เข้า Dest_In</strong> · รวมทุกทะเบียน · เฉพาะเที่ยวที่จับคู่แล้ว (ไม่รวม Unmatched)</p>
-<table><thead><tr><th>วันที่</th><th>จำนวนเที่ยว</th><th>จำนวนรถ (มีเที่ยววันนั้น)</th></tr></thead><tbody>
-{tpd_rows_html}
-</tbody></table></div>
-<div class='grid'>
-<div class='card'><div class='label'>เที่ยวจริง</div><div class='value'>{actual}</div></div>
-<div class='card'><div class='label'>เที่ยว commit</div><div class='value'>{commit}</div></div>
-<div class='card'><div class='label'>เที่ยวขาด</div><div class='value warn'>{short}</div></div>
-<div class='card'><div class='label'>ค่าชดเชยเที่ยวขาด</div><div class='value money'>{extra:,}</div></div>
-</div>
+<div class='hero-trips'><div class='hero-copy'><div class='hero-tag'>แนะนำสำหรับลูกค้า</div><div class='hero-title'>เริ่มจากรายการเที่ยวทั้งหมด</div><div class='hero-sub'>เวลาเข้า-ออกครบ · ค่าขนส่ง / ส่วนเพิ่ม / ขากลับ — กรองทะเบียนได้ · ดาวน์โหลด Excel รายเที่ยวละเอียดได้จากปุ่มขวาบนหัวตารางในหน้าเที่ยวทั้งหมด</div></div><a class='btn-primary' href='trips.html'>เปิดเที่ยวทั้งหมด</a></div><div class='nav-secondary'><a href='trips.html'>ดูเที่ยวทั้งหมด</a> · <a href='../../../Oatside/Oatside_PG_Trip_Summary_By_Site.xlsx'>ดาวน์โหลด Excel รวมทุกชีต</a></div>
 <div class='grid'>
 <div class='card'><div class='label'>ค่าเที่ยวปกติ (A)</div><div class='value money'>{base_baht:,}</div></div>
-<div class='card'><div class='label'>ชาร์จ {cfg.one_trip_surcharge_pct:.0f}% (วัน 1 เที่ยว)</div><div class='value money'>{fifty_total_baht:,}</div></div>
-<div class='card'><div class='label'>รวมส่วนเพิ่ม</div><div class='value money'>{grand_extra_baht:,}</div></div>
-<div class='card'><div class='label'>ยอดรวมลูกค้า</div><div class='value money'>{customer_grand_baht:,}</div></div>
+<div class='card'><div class='label'>ชาร์จเสริม ตีเปล่า/เสียเวลา/ข้ามคืน (C)</div><div class='value money'>{fifty_total_baht:,}</div></div>
+<div class='card'><div class='label'>No-work Recovery +50% (D)</div><div class='value money'>{nw_total_baht:,}</div></div>
+<div class='card'><div class='label'>รวมลูกค้า</div><div class='value money'>{customer_grand_baht:,}</div></div>
 </div>
-<div class='panel'><h3>แยกตาม Site (min trips)</h3><table><thead><tr><th>Site</th><th>จริง</th><th>Commit</th><th>ขาด</th><th>ค่าชดเชย</th></tr></thead><tbody>
-<tr><td><span class='badge bigc'>BigC</span></td><td>{bc_a}</td><td>{bc_c}</td><td>{bc_s}</td><td>{bc_e:,}</td></tr>
-<tr><td><span class='badge lcb'>LCB</span></td><td>{lc_a}</td><td>{lc_c}</td><td>{lc_s}</td><td>{lc_e:,}</td></tr>
+<details class='section-fold'><summary class='section-sum section-sum-row'><span class='sum-main'>(1) จำนวนเที่ยวต่อวัน (matched Dest_In)</span><span class='sum-dl'>{_xlsx_dl('01_CPD_MatchedTripsPerDay.xlsx', 'ตาราง (1)')}</span></summary>
+<div class='panel'>
+<p class='sub'>นับตาม Dest_In · รวมทุกทะเบียน · เฉพาะเที่ยวที่จับคู่แล้ว</p>
+<table><thead><tr><th>วันที่</th><th>จำนวนเที่ยว</th><th>จำนวนรถ</th></tr></thead><tbody>
+{tpd_rows_html}
 </tbody></table></div>
-<div class='panel'><h3>Audit Log — เหตุผลการคิดเงิน (รายวัน × ทะเบียน)</h3>
-<p class='sub'>ทุกแถวอธิบายว่าวันนั้นทะเบียนนั้นคิดเงินอย่างไร — ใช้อ้างอิงกับลูกค้าเมื่อมีข้อสงสัย</p>
-<table><thead><tr><th>วันที่ Dest_In</th><th>ทะเบียน</th><th>Site</th><th>เที่ยว</th><th>เรท(฿)</th><th>ค่าเที่ยว(฿)</th><th>+{cfg.one_trip_surcharge_pct:.0f}%(฿)</th><th>รวม(฿)</th><th>เหตุผล</th></tr></thead><tbody>
+</details>
+<details class='section-fold'><summary class='section-sum section-sum-row'><span class='sum-main'>(2) เดลี่รถทุกคัน — Dest_In × ทะเบียน</span><span class='sum-dl'>{_xlsx_dl('02_Plate_DestDay_Daily.xlsx', 'ตาราง (2)')}</span></summary>
+<div class='panel'>
+<p class='sub'>เรท: {config_rate_summary(cfg)} ฿/เที่ยว · คอลัมน์ส่วนเพิ่มแสดงได้หลายป้ายในวันเดียวกัน (เว้นวรรค) — ตีเปล่า = No-work recovery หรือ mark override; ค่าเสียเวลา = fifty; ข้ามคืนเต็มเที่ยว = +100% (หลัง override) · Policy: recovery-day บวกคู่กับ fifty หากมี (2026-05-01){'<br>ตาราง (2) นับตาม Dest_In · <b>Audit Log ด้านล่างคิดตาม วันงาน (Origin_In)</b>' if cfg.use_origin_day_fifty else ''}</p>
+<table><thead><tr><th>วันที่</th><th>ทะเบียน</th><th>Site</th><th>เที่ยว</th><th>เรท(฿)</th><th>ค่าเที่ยว(฿)</th><th>ส่วนเพิ่ม (฿)</th><th>รวมวัน(฿)</th></tr></thead><tbody>
+{"".join(f"<tr><td>{r['dest_date']}</td><td><a href='plates/{esc(r['plate'])}.html'>{esc(r['plate'])}</a></td><td><span class='badge {'bigc' if r['site']=='BigC' else 'lcb'}'>{r['site']}</span></td><td>{r['matched_trips']}</td><td>{r['trip_rate_baht']:,}</td><td>{r['base_line_baht']:,}</td><td>{(r['fifty_badge_html'] if r.get('fifty_badge_html') else f"<span class='money'>{r['fifty_pct_baht']:,}</span>")}</td><td class='money'>{r['customer_day_baht']:,}</td></tr>" for r in pday_rows) or "<tr><td colspan=8>ไม่มีข้อมูล</td></tr>"}
+</tbody></table></div>
+</details>
+<details class='section-fold'><summary class='section-sum section-sum-row'><span class='sum-main'>(3) Unmatched — {len(unmatched)} legs เรียงตามเวลา</span><span class='sum-dl'>{_xlsx_dl('03_Unmatched_Legs.xlsx', 'ตาราง (3)')}</span></summary>
+<div class='panel'>
+<p class='sub'>UM-O = Origin ไม่มี Dest คู่ · UM-D = Dest ไม่มี Origin คู่ · max_travel_h={cfg.max_travel_h}h · match เลือก Origin ที่ t_in ล่าสุดก่อน Dest</p>
+<table><thead><tr><th>ประเภท</th><th>ทะเบียน</th><th>เวลาเข้า</th><th>เวลาออก</th><th>เหตุผล</th></tr></thead><tbody>
+{um_section_html}
+</tbody></table></div></details>
+
+<details class='section-fold'><summary class='section-sum section-sum-row'><span class='sum-main'>(คลิกเพื่อขยาย) Audit Log — เหตุผลการคิดเงิน รายวัน × ทะเบียน</span><span class='sum-dl'>{_xlsx_dl('04_Audit_Log.xlsx', 'Audit')}</span></summary>
+<div class='panel'><p class='sub'>ทุกแถวอธิบายว่าวันนั้นทะเบียนนั้นคิดเงินอย่างไร</p>
+<table><thead><tr><th>{'วันงาน' if cfg.use_origin_day_fifty else 'วันที่ Dest_In'}</th><th>ทะเบียน</th><th>Site</th><th>เที่ยว</th><th>เรท(฿)</th><th>ค่าเที่ยว(฿)</th><th>ส่วนเพิ่ม (฿)</th><th>รวม(฿)</th><th>เหตุผล</th></tr></thead><tbody>
 {audit_html or "<tr><td colspan=9>ไม่มีข้อมูล</td></tr>"}
-</tbody></table></div>
-<div class='panel'><h3>กิจกรรมรายวัน (Dest_In date)</h3><table><thead><tr><th>วันที่</th><th>รถ</th><th>เที่ยวจริง</th><th>Commit min</th><th>ขาด</th><th>BigC รถ</th><th>BigC เที่ยว</th><th>LCB รถ</th><th>LCB เที่ยว</th></tr></thead><tbody>{daily_act_rows_html}</tbody></table></div>
-<div class='panel'><h3>รายวัน × ทะเบียน (Plate_DestDay)</h3>
-<p class='sub'>Base = เที่ยวในวันนั้น × เรท | คอลัมน์ +{cfg.one_trip_surcharge_pct:.0f}% แสดงเมื่อถูก charge (หลัง override)</p>
-<table><thead><tr><th>วันที่</th><th>ทะเบียน</th><th>Site</th><th>เที่ยว</th><th>เรท</th><th>ค่าเที่ยว</th><th>+{cfg.one_trip_surcharge_pct:.0f}%</th><th>รวมวัน</th></tr></thead><tbody>
-{"".join(f"<tr><td>{r['dest_date']}</td><td><a href='plates/{esc(r['plate'])}.html'>{esc(r['plate'])}</a></td><td><span class='badge {'bigc' if r['site']=='BigC' else 'lcb'}'>{r['site']}</span></td><td>{r['matched_trips']}</td><td>{r['trip_rate_baht']:,}</td><td>{r['base_line_baht']:,}</td><td class='{'money' if r['fifty_pct_baht'] else ''}'>{r['fifty_pct_baht']:,}</td><td class='money'>{r['customer_day_baht']:,}</td></tr>" for r in pday_rows) or "<tr><td colspan=8>ไม่มีข้อมูล</td></tr>"}
-</tbody></table></div>
-<div class='panel'><h3>รายละเอียด +{cfg.one_trip_surcharge_pct:.0f}% (วันที่วิ่ง 1 เที่ยว)</h3>
-<p class='sub'>Auto=Y = ระบบเห็น 1 เที่ยวในวันนั้น | Override: exclude_50 / include_50 จาก oatside_billing_overrides.json</p>
-<table><thead><tr><th>วันที่</th><th>ทะเบียน</th><th>Site</th><th>เที่ยว</th><th>Auto</th><th>Override</th><th>Note</th><th>เรท</th><th>+{cfg.one_trip_surcharge_pct:.0f}%</th></tr></thead><tbody>{lt_rows_html if lt_rows_html else f"<tr><td colspan=9>ไม่มี</td></tr>"}</tbody></table></div>
-<div class='panel'><h3>Match cycle (Unmatched รวมเข้า wait)</h3>
-<p class='sub'>หน่วย H.MM (เช่น 3.30 = 3 ชม. 30 นาที)</p>
-<table><thead><tr><th>วันที่</th><th>ทะเบียน</th><th>Site</th><th>Cycle</th><th>Orig Wait</th><th>Dest Wait</th><th>Travel</th><th>UM Orig</th><th>UM Dest</th><th>Adj Orig</th><th>Adj Dest</th><th>Combined</th></tr></thead><tbody>{dt_rows_html}</tbody></table></div>
-<div class='panel'><h3>เดินทางผิดปกติ (threshold {fmt_hm(thr)} h.mm)</h3><table><thead><tr><th>Origin Date</th><th>Dest Date</th><th>ทะเบียน</th><th>Site</th><th>Origin Out</th><th>Dest In</th><th>Travel</th></tr></thead><tbody>{abn_rows_html or '<tr><td colspan=7>ไม่มี</td></tr>'}</tbody></table></div>
-<div class='panel'><h3>รายทะเบียน</h3><ul>{''.join(f"<li><a href='plates/{esc(p)}.html'>{esc(p)}</a></li>" for p in plates)}</ul></div>
-</body></html>"""
+</tbody></table></div></details>
+<details class='section-fold'><summary class='section-sum section-sum-row'><span class='sum-main'>รายทะเบียน</span><span class='sum-dl'>{_xlsx_dl('02_Plate_DestDay_Daily.xlsx', 'เดลี่×ทะเบียน')}</span></summary>
+<div class='panel'><ul>{''.join(f"<li><a href='plates/{esc(p)}.html'>{esc(p)}</a></li>" for p in plates)}</ul></div>
+</details></body></html>"""
 
     report_dir.mkdir(parents=True, exist_ok=True)
     (report_dir / "index.html").write_text(idx, encoding="utf-8")
 
-    trips_html_content = f"""<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
+    _trips_plate_opts = "".join(f"<option value='{esc(p)}'>{esc(p)}</option>" for p in plates)
+    trips_html_content = (
+        f"""<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
 <title>Trips</title><style>{css}</style></head><body>
-<div class='h1'>เที่ยวทั้งหมด</div>
-<div class='nav'><a href='index.html'>&larr; กลับสรุป</a></div>
-<div class='panel'><h3>เที่ยวทั้งหมด (matched + unmatched)</h3>
-<p class='sub'>เรียงตามเวลา (matched ใช้ Dest In · unmatched ใช้เวลาขา Origin/Destination) — UM-O/UM-D เว้นฝั่งที่ยังไม่มีคู่เป็น —</p>
-<table><thead><tr><th>Origin Date</th><th>Dest Date</th><th>Site</th><th>ทะเบียน</th><th>Origin In</th><th>Origin Out</th><th>Dest In</th><th>Dest Out</th><th>Orig Wait</th><th>Travel</th><th>Dest Wait</th></tr></thead><tbody>
+<div class='h1'>เที่ยวทั้งหมด <span class='trips-tag'>หน้าหลักลูกค้า</span></div>
+<div class='trips-lead'>เวลาเข้า-ออกครบทุกขา · ค่าขนส่ง / เสียเวลา / ขากลับ — กรองทะเบียนได้ด้านล่าง</div>
+<div class='nav'><a href='index.html'>&larr; สรุปภาพรวม</a> · <a href='../../../Oatside/Oatside_PG_Trip_Summary_By_Site.xlsx'>Excel รวมทุกชีต</a></div>
+<div class='panel'><div class='panel-title-row'><h3>เที่ยวทั้งหมด (matched + unmatched)</h3><a class='xlsx-dl' href='exports/05_Trip_Detail.xlsx' download onclick='event.stopPropagation()'>ดาวน์โหลด Excel (Trip Detail)</a></div>
+<p class='sub'>เรียงตามเวลา (matched ใช้ Origin In · unmatched ใช้เวลาขา Origin/Destination) — UM-O/UM-D เว้นฝั่งที่ยังไม่มีคู่เป็น —<br>
+<b>ค่าเงิน:</b> ค่าขนส่ง = เรทวัน Dest_In ของเที่ยวนั้น · <b>เสียเวลา+50%/+100%</b> = ยอดรวมส่วนเพิ่ม fifty ของ (ทะเบียน×วัน Dest_In) แสดงที่แถวแรกของวันนั้น — <b>ไม่ได้คิดจากชั่วโมงในช่อง Dest Wait โดยตรง</b> (สีส้ม = แค่เตือนว่ารอปลายทางเกินเกณฑ์)</p>
+<div class='filter-bar'><label for='tripsPlateFilter'>กรองทะเบียน</label><select id='tripsPlateFilter'><option value=''>ทุกคัน</option>{_trips_plate_opts}</select><label for='tripsPlateQuery' style='margin-left:6px'>ค้นหา</label><input id='tripsPlateQuery' type='search' placeholder='พิมพ์ค้นหา...' autocomplete='off'></div>
+<div class='table-scroll'><table id='tripsAllTable'><thead><tr><th>Origin Date</th><th>Dest Date</th><th>Site</th><th>ทะเบียน</th><th>Origin In</th><th>Origin Out</th><th>Dest In</th><th>Dest Out</th><th>Orig Wait</th><th>Travel</th><th>Dest Wait</th><th>ค่าขนส่ง(฿)</th><th>เสียเวลา+50%(฿)</th><th>เสียเวลา+100%(฿)</th><th>ตีเปล่า+50%(฿)</th></tr></thead><tbody>
 {merged_all_rows}
-</tbody></table></div>
-</body></html>"""
+</tbody></table></div></div>
+"""
+        + _TRIPS_FILTER_JS
+        + "\n</body></html>"
+    )
+
     (report_dir / "trips.html").write_text(trips_html_content, encoding="utf-8")
 
     plates_dir = report_dir / "plates"
@@ -1420,21 +2498,61 @@ def write_html(
     by_plate: dict[str, list[Trip]] = defaultdict(list)
     for t in trips:
         by_plate[t.plate].append(t)
+    # build audit note index by (plate, origin_day) for plate-page reason display
+    audit_oday_idx: dict[tuple[str, date], str] = {}
+    if cfg.use_origin_day_fifty:
+        for _ar in audit_rows:
+            if "origin_day" in _ar:
+                audit_oday_idx[(_ar["plate"], _ar["origin_day"])] = _ar["billing_note"]
     for p, lst in by_plate.items():
-        by_day: dict[date, list[Trip]] = defaultdict(list)
-        for t in lst:
-            by_day[t.dest_date].append(t)
-        day_rows = []
-        for d in sorted(by_day.keys()):
-            cnt = len(by_day[d])
-            fr = fifty_by_key.get((p, d))
-            badge = ""
-            if fr is not None:
-                badge = f" <span class='badge abn'>+{cfg.one_trip_surcharge_pct:.0f}% {fr['surcharge_baht']:,}</span>"
-            elif cnt == 1:
-                badge = " <span class='badge lcb'>1 เที่ยว (ไม่เก็บ +%)</span>"
-            day_rows.append(f"<tr><td>{d}</td><td>{cnt}</td><td>{badge}</td></tr>")
-        day_tbl = "".join(day_rows)
+        if cfg.use_origin_day_fifty:
+            by_oday: dict[date, list[Trip]] = defaultdict(list)
+            for t in lst:
+                by_oday[t.o_in.date()].append(t)
+            day_rows = []
+            for od in sorted(by_oday.keys()):
+                cnt = len(by_oday[od])
+                frs = fifty_origin_lists.get((p, od), [])
+                reason = audit_oday_idx.get((p, od), f"ไม่เก็บ (วันงาน {cnt} เที่ยว)" if cnt != 1 else "ไม่เก็บ (override หรือเงื่อนไขเพิ่ม)")
+                badge = ""
+                if frs:
+                    parts = [html_fifty_surcharge_badge(x, cfg) for x in frs if int(x.get("surcharge_baht", 0) or 0) > 0]
+                    parts = [b for b in parts if b]
+                    if parts:
+                        badge = " " + " ".join(parts)
+                elif cnt == 1:
+                    badge = " <span class='badge lcb'>1 เที่ยว (ไม่เก็บ)</span>"
+                nw_sum = sum(trip_no_work_outbound_baht(t, first_no_work, cfg) for t in by_oday[od])
+                nw_cell = f"฿{nw_sum:,}" if nw_sum else "—"
+                day_rows.append(
+                    f"<tr><td>{od}</td><td>{cnt}</td><td>{badge}</td>"
+                    f"<td class='note'>{esc(reason)}</td><td>{nw_cell}</td></tr>"
+                )
+            day_tbl = "".join(day_rows)
+            summary_hdr = "รายวันงาน (Origin_In)"
+            summary_sub = "<p class='sub'>วันงาน = วันที่ Origin_In · ข้ามคืนไม่แตกวัน · วันไม่มี Origin ไม่นับ</p>"
+            day_thead = "<tr><th>วันงาน</th><th>เที่ยว</th><th>ส่วนเพิ่ม</th><th>เหตุผล</th><th>ตีเปล่า+50%(฿)</th></tr>"
+        else:
+            by_day: dict[date, list[Trip]] = defaultdict(list)
+            for t in lst:
+                by_day[t.dest_date].append(t)
+            day_rows = []
+            for d in sorted(by_day.keys()):
+                cnt = len(by_day[d])
+                frs = fifty_by_lists.get((p, d), [])
+                badge = ""
+                if frs:
+                    parts = [html_fifty_surcharge_badge(x, cfg) for x in frs if int(x.get("surcharge_baht", 0) or 0) > 0]
+                    parts = [b for b in parts if b]
+                    if parts:
+                        badge = " " + " ".join(parts)
+                elif cnt == 1:
+                    badge = " <span class='badge lcb'>1 เที่ยว (ไม่เก็บ +%)</span>"
+                day_rows.append(f"<tr><td>{d}</td><td>{cnt}</td><td>{badge}</td></tr>")
+            day_tbl = "".join(day_rows)
+            summary_hdr = "รายวัน (Dest_In)"
+            summary_sub = ""
+            day_thead = "<tr><th>วันที่</th><th>เที่ยว</th><th>หมายเหตุ billing</th></tr>"
         merged_plate_rows = interleaved_matched_unmatched_rows_html(
             lst,
             unmatched,
@@ -1447,10 +2565,10 @@ def write_html(
 <title>{esc(p)}</title><style>{css}</style></head><body>
 <div class='h1'>ทะเบียน {esc(p)}</div>
 <div class='nav'><a href='../index.html'>&larr; กลับสรุป</a> | <a href='../trips.html'>ดูเที่ยวทั้งหมด</a></div>
-<div class='panel'><h3>รายวัน (Dest_In)</h3><table><thead><tr><th>วันที่</th><th>เที่ยว</th><th>หมายเหตุ billing</th></tr></thead><tbody>{day_tbl}</tbody></table></div>
+<div class='panel'><h3>{summary_hdr}</h3>{summary_sub}<table><thead>{day_thead}</thead><tbody>{day_tbl}</tbody></table></div>
 <div class='panel'><h3>รายเที่ยว (matched + unmatched)</h3>
-<p class='sub'>เรียงตามเวลา (matched ใช้ Dest In · unmatched ใช้เวลาขา Origin/Destination) — UM-O/UM-D เว้นฝั่งที่ยังไม่มีคู่เป็น —</p>
-<table><thead><tr><th>Origin Date</th><th>Dest Date</th><th>Site</th><th>Origin In</th><th>Origin Out</th><th>Dest In</th><th>Dest Out</th><th>Orig Wait</th><th>Travel</th><th>Dest Wait</th></tr></thead><tbody>{merged_plate_rows}</tbody></table></div>
+<p class='sub'>เรียงตามเวลา (matched ใช้ Origin In · unmatched ใช้เวลาขา Origin/Destination) — UM-O/UM-D เว้นฝั่งที่ยังไม่มีคู่เป็น —<br>หัวตารางล่างเลื่อนตามแบบ freeze แถว (เลื่อนในกรอบ)</p>
+<div class='table-scroll'><table><thead><tr><th>Origin Date</th><th>Dest Date</th><th>Site</th><th>Origin In</th><th>Origin Out</th><th>Dest In</th><th>Dest Out</th><th>Orig Wait</th><th>Travel</th><th>Dest Wait</th><th>ค่าขนส่ง(฿)</th><th>เสียเวลา+50%(฿)</th><th>เสียเวลา+100%(฿)</th><th>ตีเปล่า+50%(฿)</th></tr></thead><tbody>{merged_plate_rows}</tbody></table></div></div>
 </body></html>"""
         (plates_dir / f"{p}.html").write_text(pg, encoding="utf-8")
 
@@ -1465,19 +2583,36 @@ def main() -> None:
     origin_path, dest_path = discover_gps_files(folder)
     trips, unmatched, _travels = build_trips(origin_path, dest_path, cfg)
     daily_rows = daily_activity_by_dest(trips, cfg)
-    daily_time = daily_time_rows(trips, unmatched)
+    daily_time = daily_time_rows(trips, unmatched, cfg)
     actual, commit, short, extra = billing_totals(daily_rows, cfg)
     bc_stats = site_billing(daily_rows, cfg)
     overrides = load_billing_overrides()
-    fifty_rows, fifty_total = one_trip_fifty_pct_details(trips, overrides, cfg)
+    if cfg.use_origin_day_fifty:
+        fifty_rows, fifty_total = one_trip_fifty_pct_origin_day(trips, overrides, cfg)
+    elif cfg.use_origin_24h_fifty:
+        fifty_rows, fifty_total = one_trip_fifty_pct_details_origin24h(trips, overrides, cfg)
+    else:
+        fifty_rows, fifty_total = one_trip_fifty_pct_details(trips, overrides, cfg)
+    add_fr, add_tot = supplement_long_dest_wait_midnight_fifty(trips, fifty_rows, overrides, cfg)
+    fifty_rows = fifty_rows + add_fr
+    fifty_total += add_tot
+    if cfg.use_origin_day_fifty:
+        audit_rows = origin_day_audit_rows(trips, fifty_rows, overrides, cfg)
+    elif cfg.use_origin_24h_fifty:
+        audit_rows = audit_log_rows(trips, fifty_rows, overrides, cfg)
+    else:
+        audit_rows = audit_log_rows(trips, fifty_rows, overrides, cfg)
     base_baht = base_trips_revenue_baht(trips, cfg)
-    pday_rows = plate_dest_day_rows(trips, fifty_rows, cfg)
-    audit_rows = audit_log_rows(trips, fifty_rows, overrides, cfg)
+    o_legs_all = parse_legs(origin_path)
+    nw_rows, nw_total = no_work_outbound_rows(trips, cfg)
+    pday_rows = plate_dest_day_rows(trips, fifty_rows, cfg, nw_rows=nw_rows)
     min_trip_money = int(extra) if cfg.charge_min_trip_shortfall else 0
     if not cfg.charge_min_trip_shortfall:
         bc_a, bc_c, bc_s, bc_e, lc_a, lc_c, lc_s, lc_e = bc_stats
         bc_stats = (bc_a, bc_c, bc_s, 0, lc_a, lc_c, lc_s, 0)
-    grand_extra = min_trip_money + int(fifty_total)
+    phantom_rows = phantom_zero_trip_candidates(o_legs_all, trips, cfg)
+    hint_rows = double_origin_um_hints(unmatched)
+    grand_extra = min_trip_money + int(fifty_total) + int(nw_total)
     customer_grand_baht = int(base_baht) + int(grand_extra)
 
     xlsx_out = folder / "Oatside_PG_Trip_Summary_By_Site.xlsx"
@@ -1494,9 +2629,19 @@ def main() -> None:
         min_trip_money,
         audit_rows,
         cfg,
+        int(customer_grand_baht),
+        nw_rows,
+        int(nw_total),
+        phantom_rows,
+        hint_rows,
+    )
+    report_dir = _root() / "TransportRateCalculator" / "reports" / "oatside-apr2026"
+    write_split_excel_exports(
+        xlsx_out,
+        report_dir,
+        built_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
     )
 
-    report_dir = _root() / "TransportRateCalculator" / "reports" / "oatside-apr2026"
     write_html(
         report_dir,
         origin_path.name,
@@ -1516,6 +2661,7 @@ def main() -> None:
         pday_rows,
         audit_rows,
         unmatched,
+        int(nw_total),
         cfg,
     )
 

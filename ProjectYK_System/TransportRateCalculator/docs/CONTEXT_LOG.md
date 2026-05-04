@@ -2927,3 +2927,61 @@ Parser ใหม่:
 ### Action ถัดไป
 - เปิด **`https://yk-logistics.github.io/transport-rate-calculator/`** (หรือ Pages URL ปัจจุบัน) รีเฟรช hard (Ctrl+F5) ตรวจหน้าเครื่องคิดเรท
 - ถ้าต้องการนำงานเดิมจาก stash กลับมา: **`git stash pop`** แล้วแก้ conflict ถ้ามี
+
+---
+
+## 2026-05-01 (Session Summary #91 - Oatside: กู้ UI ลูกค้า + Excel แยกไฟล์หลัง deploy calculator)
+
+### บริบทจากผู้ใช้
+- ไปกด deploy ของ Transport calculator แล้วรู้สึกว่า **ไฟล์/หน้าตา Oatside หาย** — ไม่แน่ใจว่า commit ล่าสุดเป็นของเมื่อไหร่ ต้องการ **กู้** หรือ **เขียนใหม่ตามที่คุยกัน**
+
+### การตัดสินใจรอบนี้
+- **Git ไม่มีเวอร์ชันที่เคย commit ไว้สำหรับชุด UI ล่าสุด** (hero + ลิงก์ Excel ขวาหัว section + `exports/*.xlsx`) — ฟีเจอร์เดิมอยู่ในสคริปต์ patch ใน `ProjectYK_System/tools/` แต่ baseline `build_oatside_reports.py` เปลี่ยนจากที่ patch คาดไว้
+- **ทำแบบกู้โค้ดจริง**: รันลำดับ patch บนไฟล์ปัจจุบัน — แก้สคริปต์ให้ตรง baseline (trips ไม่มีคอลัมน์ขากลับ, `write_excel` ไม่ส่ง `pday_rows/cpd_rows`, สร้าง `_idx_segment_raw.txt` ใหม่จากไฟล์จริง)
+- **`deploy.ps1`** ของ calculator แค่ copy `transport_rate_calculator.html` → `index.html` ที่ราก repo — **ไม่ใช่สาเหตุโดยตรง** ที่ลบ `Oatside/build_oatside_reports.py`; แต่การ sync/reset/stash อาจทำให้สับสนกับของเก่า
+
+### สิ่งที่ทำแล้ว
+- อัปเดต **`regenerate_oatside_idx_segment_raw.py`** + regenerate **`_idx_segment_raw.txt`**
+- แก้ **`apply_oatside_ui_trips_filter_index_fold.py`** ให้ตรงหน้า `trips.html` ปัจจุบัน (15 คอลัมน์)
+- แก้ **`patch_oatside_excel_exports.py`** (`main` block) แล้วรันลำดับ: **UI fold/filter → Excel split+beautify → hero+xlsx inline → flex Audit**
+- **`python -m py_compile Oatside/build_oatside_reports.py`** ผ่าน
+
+### Action ถัดไป
+- โอรัน **`python Oatside/build_oatside_reports.py`** เมื่อมีไฟล์ GPS/input ครบ — ตรวจ **`TransportRateCalculator/reports/oatside-apr2026/`** มีโฟลเดอร์ **`exports/`** และหน้า **`index.html` / `trips.html`** ตามดีไซน์
+- ถ้ายังอยาก **กู้สถานะ git**: ดู **`git reflog`** / **`git stash list`** — แต่ชุด UI นี้ถูกสร้างใหม่ใน repo แล้วโดยไม่ต้องพึ่ง commit เก่า
+
+---
+
+## 2026-05-01 (Session Summary #92 - เขียนเงื่อนไขรายงาน Oatside ลูกค้าเป็นเอกสารมาตรฐาน)
+
+### บริบทจากผู้ใช้
+- ขอให้ **เขียนใหม่ตามเงื่อนไขที่คุยกัน** — เพื่อเก็บเป็นข้อตกลงถาวร
+
+### การตัดสินใจรอบนี้
+- เพิ่ม **`docs/OATSIDE_CUSTOMER_REPORT_SPEC.md`** — สรุป pipeline Excel/HTML, hero/index, หัว section + `exports/`, หน้า trips + filter + Trip Detail, Audit `(คลิกเพื่อขยาย)` + CSS ชิดขวา, และ checklist หลัง build
+
+### สิ่งที่ทำแล้ว
+- ตรวจโค้ดปัจจุบันมี marker หลักครบ (hero, `_xlsx_dl`, ไม่เรียก `html_export_downloads_block` ใน index, flex Audit, `tripsAllTable`)
+- เพิ่มเอกสารสเปก + อัปเดต **`CHANGELOG_MASTER.md`** (บรรทัดสรุป)
+
+### Action ถัดไป
+- เวลาปรับ UI รอบถัดไปให้แก้ **เอกสารสเปก + โค้ด** คู่กัน — กันหลงแบบ “deploy แล้วหาย”
+
+---
+
+## 2026-05-04 (Session Summary #93 - Deploy ปลอดภัย + กู้ stash Oatside)
+
+### บริบทจากผู้ใช้
+- ขอให้ทำขั้นตอนป้องกัน + **ลองกู้** งานหลังรู้สึกเสียใจที่กด deploy เอง
+
+### การตัดสินใจรอบนี้
+- **`deploy.ps1` / `deploy_oatside_report.ps1`**: ค่าเริ่มต้น = **commit ในที่เดิมเท่านั้น** — ต้องใส่ **`-Push`** จึงจะ `push` (one-click `.bat` ส่ง **`-Push`** ให้ — พฤติกรรม “กดเดียวขึ้นเว็บ” ยังมี)
+- เพิ่ม **`deploy_one_click_local.bat`**, **`preflight_deploy.ps1`**, **`docs/DEPLOY_SAFETY_TH.md`**
+- **`git stash apply stash@{0}`** งาน WIP ก่อน recover (Oatside + เอกสาร) ลง working tree สำเร็จ ไม่ conflict
+
+### สิ่งที่ทำแล้ว
+- อัปเดตสคริปต์ + เอกสาร + CONTEXT นี้
+
+### Action ถัดไป
+- ตรวจ diff Oatside/เอกสาร แล้ว **commit** หรือแก้ต่อก่อน push
+- ลบ stash ซ้ำด้วย `git stash drop` หลังมั่นใจ (ระวัง drop ผิดก้อน)

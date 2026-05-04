@@ -2,6 +2,19 @@
 
 สรุปการตัดสินใจสำคัญระดับภาพรวมข้ามทุกโมดูล
 
+## 2026-05-04 (Deploy safety — push แบบ opt-in + preflight + เอกสาร TH)
+
+- **`deploy.ps1` / `deploy_oatside_report.ps1`**: ค่าเริ่มต้น **commit เท่านั้น** — ต้อง **`-Push`** จึง push (one-click `.bat` ส่ง **`-Push`** ให้) · **`deploy_one_click_local.bat`**, **`preflight_deploy.ps1`**, **`docs/DEPLOY_SAFETY_TH.md`**
+- กู้งาน stash (Oatside/เอกสาร) ด้วย `git stash apply` ลง working tree
+
+## 2026-05-01 (Oatside — เอกสารสเปกรายงานลูกค้า `OATSIDE_CUSTOMER_REPORT_SPEC.md`)
+
+- สรุปเงื่อนไขที่ตกลง: hero/index, ลิงก์ `exports/*.xlsx` ขวาหัว section, หน้า `trips` + filter + Trip Detail, pipeline `beautify` + `write_split_excel_exports`, checklist หลัง build — อ้างอิง `ProjectYK_System/TransportRateCalculator/docs/OATSIDE_CUSTOMER_REPORT_SPEC.md`
+
+## 2026-05-01 (Oatside — กู้ชุดลูกค้า: hero + Excel `exports/` + หัว section + trips filter)
+
+- Re-apply ลำดับ patch บน `Oatside/build_oatside_reports.py` (baseline ปัจจุบัน): index fold + trips filter / `write_split_excel_exports` + beautify / hero + ลิงก์ดาวน์โหลดขวา / Audit flex — แก้สคริปต์ patch + `regenerate_oatside_idx_segment_raw.py` + `_idx_segment_raw.txt` ให้ตรงไฟล์จริง
+
 ## 2026-05-04 (GitHub Pages — deploy เครื่องคิดเรท `index.html` + เก็บต้นทาง `transport_rate_calculator.html`)
 
 - Repo **`transport-rate-calculator`**: commit **`b2993ae`** — อัปเดต **`index.html`** จากเนื้อหาเดียวกับ **`ProjectYK_System/TransportRateCalculator/transport_rate_calculator.html`** และเพิ่มไฟล์ต้นทางใน repo — push **`main`** สำเร็จ (remote แจ้งย้ายไป org **`yk-logistics`**)

@@ -9,6 +9,7 @@
 
 ## ⭐ Quick Status (2026-05-01 | Oatside — GitHub Org `yk-logistics`)
 
+- [done] **กู้ UI ลูกค้าใน `build_oatside_reports.py`**: hero + ลิงก์ Excel ขวาหัว section + โฟลเดอร์ **`exports/*.xlsx`** + **trips** filter — รันลำดับ patch ใน `ProjectYK_System/tools/` แล้ว `py_compile` ผ่าน (ต้องรัน builder เพื่อ regenerate HTML/Excel จริง)
 - [done] **จำนวนเที่ยวต่อวัน (ลูกค้า)**: ชีต Excel **`Customer_Trips_Per_Day`** + ตารางบน **`index.html`** (matched ตามวัน `Dest_In` + จำนวนรถ) — `build_oatside_reports.py`
 - [done] **`match_plate` แบบปลายทางก่อน** (ต้นทางล่าสุดก่อน `Dest_In`) — ลด UM ผิดพลาด / ลดชน `demote_chronology_violations`; build ล่าสุด **105 / 15** + เอกสาร `OATSIDE_TRIP_PAIRING_MERGE_HANDOFF.md` §4
 - [done] **ปิดรวบ Origin ทั้งก้อน**: `enable_origin_chain_merge` default **false** + เอกสาร `OATSIDE_ORIGIN_CHAIN_MERGE_FIX.md` + build ชุด GPS **02.05.2026** (ตัวอย่าง `ProjectYK_System/tools/run_oatside_may02_build.py`)

@@ -17,5 +17,23 @@
   "min_trips_per_truck_per_day": 2,
   "max_travel_h": 48,
   "max_origin_chain_gap_h": 3,
-  "_note_max_origin_chain_gap_h": "hours: max gap Origin_Out(prev)->Origin_In(next) for chain-merge; larger gap = new hub visit (see ProjectYK_System/TransportRateCalculator/docs/OATSIDE_ORIGIN_CHAIN_MERGE_FIX.md)"
+  "_note_max_origin_chain_gap_h": "hours: max gap Origin_Out(prev)->Origin_In(next) for chain-merge; larger gap = new hub visit (see ProjectYK_System/TransportRateCalculator/docs/OATSIDE_ORIGIN_CHAIN_MERGE_FIX.md)",
+  "use_origin_24h_fifty": true,
+  "customer_no_work": [
+    {
+      "from": "2026-04-23",
+      "to": "2026-04-24",
+      "note": "customer no-work"
+    },
+    {
+      "from": "2026-04-27",
+      "to": "2026-04-28",
+      "note": "customer no-work"
+    },
+    {
+      "from": "2026-05-01",
+      "to": "2026-05-01",
+      "note": "customer no-work"
+    }
+  ]
 }

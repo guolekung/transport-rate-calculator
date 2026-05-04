@@ -4,7 +4,14 @@
 **ไฟล์หลัก:** `Oatside/build_oatside_reports.py`  
 **ผู้ใช้งานจริง:** โอ (ผู้จัดการ) — ใช้รายงาน Excel + HTML จาก GPS export
 
-### เก็บเงินลูกค้า (อัปเดต 2026-05-01)
+### เก็บเงินลูกค้า (อัปเดต 2026-05-02)
+
+- **`oatside_config.json`**
+  - **`customer_idle_windows`**: ช่วงเวลาที่ **จอดฝากลูกค้า / ไม่เกี่ยวกับลูกค้า** — ตัดชม.รอปลายทาง (`Dest_Wait`) ออกจาก **`Daily_Time_24h_Check`** และคอลัมน์ **`Dest_Wait_customer_h`** / **`Total_Cycle_customer_h`** ใน `Trip_Detail` (เที่ยวส่งก่อนจอดยังนับปกติ; ตัดเฉพาะช่วงทับ `start`–`end` กับ `(Dest_In, Dest_Out)`); **Unmatched ฝั่ง Destination** ในช่วงเดียวกันจะ **ถูกตัดชม.ออกจาก `Unmatched_Dest_h`** ใน `Daily_Time_24h_Check` ด้วย
+  - **`use_origin_24h_fifty`**: `false` = กฎเดิม (50% ตาม **วันปฏิทิน `Dest_In`** เที่ยว = 1); `true` = กฎใหม่ **หน้าต่าง 24 ชม. rolling** จาก `Origin_In` — ถ้าในหน้าต่างมี matched **พอดี 1 เที่ยว** → +50% (ชีต `Surcharge_50pct_1Trip` เพิ่มคอลัมน์ `Window_Origin_In` / `Window_End`); **2 เที่ยวในหน้าต่างเดียวกัน → ไม่เก็บ 50%**
+- **ค่าเริ่มต้นในโค้ด**: ช่วง **`71-8967`** `2026-04-20 14:00`–`2026-04-29 17:00` (ไทย) — ตาม `CONTEXT_LOG` Session #90–91
+
+### เก็บเงินลูกค้า (อัปเดต 2026-05-01 — กรณี `use_origin_24h_fifty`: false)
 
 - **ไม่ใช้ “ค่าเสียเวลา” ตาม wait threshold แล้ว** — เหลือกฎหลัก: ถ้า `(ทะเบียน, วันที่ Dest_In)` มี **matched trip = 1** → เก็บเพิ่ม **50% ของเรทวันนั้น** (`trip_rate_baht`: **12–15 เม.ย. 2026 = 8,000** / **นอกนั้น 7,500**)
 - **Manual override (จำค่า):** แก้ไฟล์ `Oatside/oatside_billing_overrides.json` (หรือตั้ง `OATSIDE_OVERRIDES_JSON`) — ดูตัวอย่าง `ProjectYK_System/TransportRateCalculator/docs/oatside_billing_overrides.example.json`
