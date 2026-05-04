@@ -2,6 +2,10 @@
 
 สรุปการตัดสินใจสำคัญระดับภาพรวมข้ามทุกโมดูล
 
+## 2026-05-04 (GitHub Pages — deploy เครื่องคิดเรท `index.html` + เก็บต้นทาง `transport_rate_calculator.html`)
+
+- Repo **`transport-rate-calculator`**: commit **`b2993ae`** — อัปเดต **`index.html`** จากเนื้อหาเดียวกับ **`ProjectYK_System/TransportRateCalculator/transport_rate_calculator.html`** และเพิ่มไฟล์ต้นทางใน repo — push **`main`** สำเร็จ (remote แจ้งย้ายไป org **`yk-logistics`**)
+
 ## 2026-05-02 (Oatside — ชีต/หน้าเว็บ «จำนวนเที่ยวต่อวัน» สำหรับลูกค้า)
 
 - `Oatside/build_oatside_reports.py`: **`customer_trips_per_day_rows()`** + ชีต Excel **`Customer_Trips_Per_Day`** + ตารางบน **`index.html`** (นับ matched ตามวันที่ `Dest_In` · รวมทุกทะเบียน) — เอกสาร **`OATSIDE_TRIP_PAIRING_MERGE_HANDOFF.md`**, **`OATSIDE_LOCAL_UPDATE_WITHOUT_UPLOAD.md`**

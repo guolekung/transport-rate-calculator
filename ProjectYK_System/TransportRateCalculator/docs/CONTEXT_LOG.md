@@ -2907,3 +2907,23 @@ Parser ใหม่:
 ### Action ถัดไป
 - โอรัน **`deploy_oatside_report_one_click.bat`** เพื่ออัปเว็บ GitHub Pages
 - ถ้าต้องการนับตาม **วันอื่น** (เช่น Origin) แจ้งมาได้ — ปัจจุบันตรงกับหลัก billing ที่ใช้ `Dest_In`
+
+---
+
+## 2026-05-04 (Session Summary #90 - Transport calculator: ขึ้น Git แทนของเก่า)
+
+### บริบทจากผู้ใช้
+- ต้องการให้ **`ProjectYK_System/TransportRateCalculator/transport_rate_calculator.html`** เป็นเวอร์ชันที่โชว์บน Git (แทนของเก่า) — หน้า root GitHub Pages ใช้ **`index.html`**
+
+### การตัดสินใจรอบนี้
+- บน remote **`origin/main`** ไม่มีไฟล์ต้นทางใน path นี้; เนื้อหาที่ deploy ล่าสุดในเครื่องสอดคล้องกับ commit **`6ea72f6`** (`index.html` กับ `transport_rate_calculator.html` เป็น blob เดียวกัน)
+- commit **`b2993ae`**: อัปเดต **`index.html`** + เพิ่ม **`ProjectYK_System/TransportRateCalculator/transport_rate_calculator.html`** ใน repo — **`git push origin main`** สำเร็จ · `main` ติดตาม **`origin/main`**
+- หมายเหตุ: remote แจ้ง repo ย้ายไป **`https://github.com/yk-logistics/transport-rate-calculator.git`** — พิจารณา `git remote set-url origin …` ภายหลัง
+- งานค้างในเครื่องก่อน sync ถูก **`git stash`** ไว้ (`stash@{0}`); การ `stash pop` ชน conflict เลย **`git reset --hard`** กลับไปที่ **`b2993ae`** — stash ยังอยู่ ใช้ **`git stash pop`** เมื่อพร้อมจัด conflict
+
+### สิ่งที่ทำแล้ว
+- Push เครื่องคิดเรทขึ้น GitHub แล้ว (root **`index.html`**)
+
+### Action ถัดไป
+- เปิด **`https://yk-logistics.github.io/transport-rate-calculator/`** (หรือ Pages URL ปัจจุบัน) รีเฟรช hard (Ctrl+F5) ตรวจหน้าเครื่องคิดเรท
+- ถ้าต้องการนำงานเดิมจาก stash กลับมา: **`git stash pop`** แล้วแก้ conflict ถ้ามี
