@@ -2,6 +2,12 @@
 
 แผนงานลำดับถัดไป (เรียงตามความสำคัญ)
 
+## ⭐ Quick Status (2026-05-04 | Deploy ปลอดภัย + กู้ stash Oatside)
+
+- [done] **`deploy.ps1` / `deploy_oatside_report.ps1`**: ค่าเริ่มต้น commit เท่านั้น — ต้อง **`-Push`** จึง push; one-click `.bat` ส่ง **`-Push`** ให้ · **`deploy_one_click_local.bat`**, **`preflight_deploy.ps1`**, **`docs/DEPLOY_SAFETY_TH.md`**
+- [done] นำงาน WIP จาก **stash** กลับมา (Oatside + เอกสาร) ด้วย `git stash apply` แล้ว **commit** `31c7b2a`
+- [next] ตรวจ `git stash list` — ลบก้อนซ้ำด้วย `git stash drop` เมื่อมั่นใจ; **push** `main` ขึ้น origin เมื่อพร้อม
+
 ## ⭐ Quick Status (2026-05-02 | One Platform — หน้า pitch สำหรับ Pages)
 
 - [done] **`reports/one-platform-status/`** บน **`yk-logistics/transport-rate-calculator`** — `index.html` + **`public-stats.json`** (สถิติรวมจริงจาก `app.db`) + `build_public_stats.py` + README — push แล้ว (ลิงก์ด้านล่าง CONTEXT_LOG)
